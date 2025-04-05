@@ -1,0 +1,42 @@
+{
+  "name": "delegate-mcp",
+  "version": "0.1.0",
+  "description": "Model Context Protocol implementation with context preparation and model delegation capabilities",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src/**/*.ts",
+    "format": "prettier --write 'src/**/*.ts'"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@google-generativeai/node": "^0.2.1",
+    "repomix": "^1.1.0",
+    "openai": "^4.28.0",
+    "@anthropic-ai/sdk": "^0.15.1",
+    "dotenv": "^16.4.1",
+    "glob": "^10.3.10",
+    "octokit": "^3.1.2",
+    "zod": "^3.22.4",
+    "chalk": "^5.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.5",
+    "typescript": "^5.3.3",
+    "eslint": "^8.56.0",
+    "prettier": "^3.2.4",
+    "vitest": "^1.2.1",
+    "@typescript-eslint/eslint-plugin": "^6.19.1",
+    "@typescript-eslint/parser": "^6.19.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
