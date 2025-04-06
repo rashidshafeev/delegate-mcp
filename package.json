@@ -17,7 +17,7 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "@google-generativeai/node": "^0.2.1",
+    "@google/generative-ai": "^0.2.1",
     "repomix": "^1.1.0",
     "openai": "^4.28.0",
     "@anthropic-ai/sdk": "^0.8.1",
