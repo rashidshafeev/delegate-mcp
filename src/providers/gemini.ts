@@ -1,7 +1,7 @@
 import { BaseModelProvider, ModelRequestOptions, ModelResponse } from './base.js';
 import { config } from '../utils/config.js';
 import { logger } from '../utils/logger.js';
-import { GoogleGenerativeAI, GenerativeModel, GenerationConfig } from '@google-generativeai/node';
+import { GoogleGenerativeAI, GenerativeModel, GenerationConfig } from '@google/generative-ai';
 
 export class GeminiProvider extends BaseModelProvider {
   readonly name = 'gemini';
