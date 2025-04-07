@@ -143,6 +143,18 @@ Delegates requests to Gemini models with flexibility in context and result handl
 | `BRANCH` | Default GitHub repository branch | No (defaults to main) |
 | `LOG_LEVEL` | Logging level (debug, info, warn, error) | No (defaults to info) |
 
+## Documentation
+
+For more detailed information, check out these documentation files:
+
+- [Detailed Usage Guide](docs/USAGE.md) - In-depth examples and file formats
+- [Development Guide](docs/DEVELOPMENT.md) - How to extend and modify the codebase
+- [Implementation Details](IMPLEMENTATION.md) - Overview of the current implementation
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
 ## License
 
 MIT
