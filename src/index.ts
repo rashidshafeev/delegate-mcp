@@ -20,7 +20,7 @@ const program = new Command();
 
 program
   .name('delegate-mcp')
-  .description('MCP implementation with context preparation and model delegation capabilities')
+  .description('MCP implementation for Gemini context preparation and delegation')
   .version(packageJson.version);
 
 // Start command - start the MCP server
@@ -43,8 +43,13 @@ program
         config.loadFromFile(options.config);
       }
       
-      // Initialize providers
+      // Initialize providers (only Gemini)
       initializeProviders();
+      const providers = getAvailableProviders();
+      
+      if (providers.length === 0) {
+        throw new Error('Gemini provider is not available. Please check your GEMINI_API_KEY environment variable.');
+      }
       
       // Start the server
       await startMcpServer();
@@ -56,36 +61,35 @@ program
     }
   });
 
-// Check command - check availability of providers
+// Check command - check if Gemini provider is available
 program
   .command('check')
-  .description('Check availability of LLM providers')
+  .description('Check availability of Gemini provider')
   .action(async () => {
     try {
-      logger.info('Checking LLM providers...');
+      logger.info('Checking Gemini provider...');
       
-      // Initialize providers
+      // Initialize provider
       initializeProviders();
       
       // Get available providers
       const providers = getAvailableProviders();
       
       if (providers.length === 0) {
-        logger.error('No LLM providers are available. Please check your API keys.');
+        logger.error('Gemini provider is not available. Please check your GEMINI_API_KEY environment variable.');
         process.exit(1);
       }
       
-      logger.success(`Available providers: ${providers.map(p => p.name).join(', ')}`);
+      logger.success('Gemini provider is available');
       
-      // For each provider, log available models
-      for (const provider of providers) {
-        const models = await provider.getAvailableModels();
-        logger.info(`Models for ${provider.name}: ${models.slice(0, 5).join(', ')}${models.length > 5 ? ` and ${models.length - 5} more...` : ''}`);
-      }
+      // Log available models
+      const provider = providers[0];
+      const models = await provider.getAvailableModels();
+      logger.info(`Available Gemini models: ${models.join(', ')}`);
       
       process.exit(0);
     } catch (error) {
-      logger.error(`Error checking providers: ${(error as Error).message}`);
+      logger.error(`Error checking provider: ${(error as Error).message}`);
       process.exit(1);
     }
   });
