@@ -6,7 +6,7 @@ import { prepareContextTool } from './tools/prepare-context.js';
 import { delegateTool } from './tools/delegate.js';
 
 /**
- * Create and configure an MCP server with all the tools
+ * Create and configure an MCP server with the prepare_context and delegate tools
  */
 export function createMcpServer(): McpServer {
   logger.info('Creating MCP server');
@@ -48,27 +48,20 @@ function registerPrepareContextTool(server: McpServer): void {
   
   const prepareContextSchema = z.object({
     // Required parameters
-    repository: z.string().describe('Path to a local repository or a GitHub repository URL'),
+    paths: z.array(z.string()).describe('Array of file or directory paths to include'),
     
     // Optional parameters
-    files: z.array(z.string()).optional().describe('Glob patterns to include specific files'),
-    ignorePatterns: z.array(z.string()).optional().describe('Glob patterns to exclude files'),
-    includeComments: z.boolean().optional().describe('Whether to include explanatory comments'),
-    subsetDirectories: z.array(z.string()).optional().describe('Only include specific directories'),
-    outputFormat: z.enum(['text', 'json', 'github']).optional().describe('Format of the output'),
-    outputPath: z.string().optional().describe('Path where output should be saved'),
-    githubOutput: z.object({
-      owner: z.string(),
-      repo: z.string(),
-      path: z.string(),
-      message: z.string().optional(),
-    }).optional().describe('GitHub repository details for saving output'),
-    maxTokens: z.number().optional().describe('Maximum tokens to include in context'),
+    comment: z.string().optional().describe('Comment to append to the end of the context'),
+    owner: z.string().optional().describe('GitHub repository owner'),
+    repo: z.string().optional().describe('GitHub repository name'),
+    branch: z.string().optional().describe('GitHub repository branch'),
+    outputPath: z.string().optional().describe('Path where output should be saved locally'),
+    githubPath: z.string().optional().describe('Path in the GitHub repository to save the file'),
   });
   
   server.tool(
     'prepare_context',
-    'Prepare and package LLM context from repository content with enhanced capabilities',
+    'Prepare context from file paths and save to GitHub',
     prepareContextSchema.shape,
     prepareContextTool
   );
@@ -86,24 +79,27 @@ function registerDelegateTool(server: McpServer): void {
     // Required parameters
     prompt: z.string().describe('The prompt to send to the model'),
     
-    // Optional parameters
-    model: z.string().optional().describe('The model to use (e.g., "gemini-pro", "gpt-4")'),
-    provider: z.string().optional().describe('The provider to use (e.g., "gemini", "openai", "anthropic")'),
-    contextFile: z.string().optional().describe('Path to a context file to use'),
-    contextText: z.string().optional().describe('Context text to include with the prompt'),
+    // Context parameters
+    paths: z.array(z.string()).optional().describe('Array of file paths to include as context'),
+    comment: z.string().optional().describe('Additional context comment'),
+    
+    // Model parameters
+    model: z.string().optional().describe('The model to use (only Gemini models supported)'),
     temperature: z.number().min(0).max(1).optional().describe('Temperature for generation'),
     maxTokens: z.number().optional().describe('Maximum tokens to generate'),
-    async: z.boolean().optional().describe('Whether to run asynchronously'),
-    storeResults: z.boolean().optional().describe('Whether to store results'),
-    resultPath: z.string().optional().describe('Path to store results'),
-    resultRepo: z.string().optional().describe('GitHub repo to store results (format: "owner/repo")'),
-    resultRepoPath: z.string().optional().describe('Path in GitHub repo to store results'),
-    systemPrompt: z.string().optional().describe('System prompt to use'),
+    
+    // Result handling parameters
+    realtime: z.boolean().optional().default(true).describe('Whether to return results in realtime'),
+    
+    // GitHub parameters
+    owner: z.string().optional().describe('GitHub repository owner'),
+    repo: z.string().optional().describe('GitHub repository name'),
+    branch: z.string().optional().describe('GitHub repository branch'),
   });
   
   server.tool(
     'delegate',
-    'Delegate requests to LLMs with flexibility in model selection and result handling',
+    'Delegate requests to Gemini with context from file paths',
     delegateSchema.shape,
     delegateTool
   );
