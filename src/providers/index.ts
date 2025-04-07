@@ -1,70 +1,59 @@
 import { providerRegistry } from './base.js';
 import { GeminiProvider } from './gemini.js';
-import { OpenAIProvider } from './openai.js';
-import { AnthropicProvider } from './anthropic.js';
 import { logger } from '../utils/logger.js';
 
 /**
- * Initialize all providers and register them with the provider registry
+ * Initialize only the Gemini provider and register it with the provider registry
  */
 export function initializeProviders(): void {
-  logger.info('Initializing LLM providers');
+  logger.info('Initializing Gemini provider');
   
-  // Create instances of each provider
+  // Create instance of the Gemini provider
   const geminiProvider = new GeminiProvider();
-  const openaiProvider = new OpenAIProvider();
-  const anthropicProvider = new AnthropicProvider();
   
-  // Register providers
+  // Register provider
   providerRegistry.registerProvider(geminiProvider);
-  providerRegistry.registerProvider(openaiProvider);
-  providerRegistry.registerProvider(anthropicProvider);
   
-  // Log available providers
-  const availableProviders = providerRegistry.getAvailableProviders();
-  if (availableProviders.length > 0) {
-    logger.success(`Available providers: ${availableProviders.map(p => p.name).join(', ')}`);
+  // Log provider availability
+  if (geminiProvider.isAvailable()) {
+    logger.success('Gemini provider is available');
   } else {
-    logger.warn('No LLM providers are available. Please check your API keys.');
+    logger.warn('Gemini provider is not available. Please check your GEMINI_API_KEY.');
   }
 }
 
 /**
- * Get a provider by name or the default provider if none is specified
+ * Get the Gemini provider or throw an error if it's not available
  */
 export async function getProvider(providerName?: string) {
-  // If no provider specified, get the first available provider
-  if (!providerName) {
-    const availableProviders = providerRegistry.getAvailableProviders();
-    if (availableProviders.length === 0) {
-      throw new Error('No LLM providers are available. Please check your API keys.');
-    }
-    return availableProviders[0];
-  }
-  
-  // Get the specified provider
-  const provider = providerRegistry.getProvider(providerName);
+  // We only support Gemini, so ignore the providerName parameter
+  const provider = providerRegistry.getProvider('gemini');
   if (!provider) {
-    throw new Error(`Provider ${providerName} not found`);
+    throw new Error('Gemini provider not found');
   }
   
   if (!provider.isAvailable()) {
-    throw new Error(`Provider ${providerName} is not available. Check your API key.`);
+    throw new Error('Gemini provider is not available. Check your GEMINI_API_KEY.');
   }
   
   return provider;
 }
 
 /**
- * Get all available providers
+ * Get all available providers (only Gemini in this case)
  */
 export function getAvailableProviders() {
   return providerRegistry.getAvailableProviders();
 }
 
 /**
- * Find the appropriate provider for a model
+ * Find the appropriate provider for a model (only Gemini models are supported)
  */
 export async function findProviderForModel(model: string) {
-  return providerRegistry.findProviderForModel(model);
+  // Only support Gemini models
+  if (!model.startsWith('gemini-')) {
+    logger.warn(`Model ${model} is not a Gemini model. Only Gemini models are supported.`);
+  }
+  
+  return providerRegistry.getProvider('gemini');
 }
