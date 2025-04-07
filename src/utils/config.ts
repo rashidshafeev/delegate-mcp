@@ -6,30 +6,17 @@ import path from 'path';
 dotenv.config();
 
 const configSchema = z.object({
-  // LLM Provider API Keys
-  openaiApiKey: z.string().optional(),
-  anthropicApiKey: z.string().optional(),
+  // LLM Provider API Key (only Gemini is required)
   geminiApiKey: z.string().optional(),
   
   // GitHub configuration
   githubToken: z.string().optional(),
+  defaultRepo: z.string().default(''),
+  defaultOwner: z.string().default(''),
+  defaultBranch: z.string().default('main'),
   
   // Default models for delegation
   defaultModel: z.string().default('gemini-pro'),
-  defaultProvider: z.string().default('gemini'),
-  
-  // Context preparation defaults
-  maxTokensPerContext: z.number().default(100000),
-  defaultIgnorePatterns: z.array(z.string()).default([
-    '**/node_modules/**',
-    '**/dist/**',
-    '**/build/**',
-    '**/.git/**',
-    '**/*.lock',
-    '**/*.min.js',
-    '**/*.map'
-  ]),
-  defaultIncludePatterns: z.array(z.string()).default(['**/*']),
   
   // Misc settings
   logLevel: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
@@ -48,25 +35,12 @@ export class Config {
   private constructor() {
     // Load from environment variables
     this.config = {
-      openaiApiKey: process.env.OPENAI_API_KEY,
-      anthropicApiKey: process.env.ANTHROPIC_API_KEY,
       geminiApiKey: process.env.GEMINI_API_KEY,
-      githubToken: process.env.GITHUB_TOKEN,
+      githubToken: process.env.GITHUB_API_KEY,
+      defaultRepo: process.env.REPO || '',
+      defaultOwner: process.env.OWNER || '',
+      defaultBranch: process.env.BRANCH || 'main',
       defaultModel: process.env.DEFAULT_MODEL || 'gemini-pro',
-      defaultProvider: process.env.DEFAULT_PROVIDER || 'gemini',
-      maxTokensPerContext: parseInt(process.env.MAX_TOKENS_PER_CONTEXT || '100000'),
-      defaultIgnorePatterns: process.env.DEFAULT_IGNORE_PATTERNS ? 
-        JSON.parse(process.env.DEFAULT_IGNORE_PATTERNS) : [
-          '**/node_modules/**',
-          '**/dist/**',
-          '**/build/**',
-          '**/.git/**',
-          '**/*.lock',
-          '**/*.min.js',
-          '**/*.map'
-        ],
-      defaultIncludePatterns: process.env.DEFAULT_INCLUDE_PATTERNS ?
-        JSON.parse(process.env.DEFAULT_INCLUDE_PATTERNS) : ['**/*'],
       logLevel: (process.env.LOG_LEVEL as any) || 'info',
       outputDirectory: process.env.OUTPUT_DIRECTORY || './output',
       tempDirectory: process.env.TEMP_DIRECTORY || './tmp',
