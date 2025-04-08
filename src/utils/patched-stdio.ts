@@ -57,7 +57,7 @@ export class PatchedStdioServerTransport extends StdioServerTransport {
     
     // Handle id
     if ('id' in obj && obj.id !== undefined) {
-      properties.push(`"id":${typeof obj.id === 'string' ? `"${obj.id}"` : obj.id}`);
+      properties.push(`"id":${typeof obj.id === 'string' ? `"${this.escapeString(obj.id)}"` : obj.id}`);
     }
     
     // Handle method
@@ -70,8 +70,9 @@ export class PatchedStdioServerTransport extends StdioServerTransport {
       properties.push(`"params":${this.stringifyValue(obj.params)}`);
     }
     
-    // Handle result
+    // Handle result - ensure it's always an object type for Claude compatibility
     if ('result' in obj && obj.result !== undefined) {
+      // Make sure to serialize result as an object
       properties.push(`"result":${this.stringifyValue(obj.result)}`);
     }
     
@@ -80,7 +81,7 @@ export class PatchedStdioServerTransport extends StdioServerTransport {
       properties.push(`"error":${this.stringifyValue(obj.error)}`);
     }
     
-    // Join properties
+    // Join properties with commas
     result += properties.join(',');
     
     // Close object
@@ -121,16 +122,15 @@ export class PatchedStdioServerTransport extends StdioServerTransport {
           
           // Map each item and join with commas
           const items = value.map(item => {
+            // Skip undefined values
+            if (item === undefined) return null;
+            
             // Ensure each item is properly stringified
-            const stringified = this.stringifyValue(item);
-            return stringified;
-          });
+            return this.stringifyValue(item);
+          }).filter(item => item !== undefined);
           
-          // Extra validation step: ensure no undefined or problematic values
-          const validItems = items.filter(item => item !== undefined && item !== 'undefined');
-          
-          // Format with extra spacing to avoid parsing issues
-          return `[${validItems.join(',')}]`;
+          // Format with proper spacing between array elements
+          return `[${items.join(',')}]`;
         } else {
           // Handle objects
           const properties: string[] = [];
@@ -144,13 +144,14 @@ export class PatchedStdioServerTransport extends StdioServerTransport {
             properties.push(`"${escapedKey}":${this.stringifyValue(propValue)}`);
           }
           
-          return `{${properties.join(',')}}`;
+          return `{${properties.join(',')}}`; 
         }
         
       default:
         // Use safer approach for unknown types
         try {
-          return JSON.stringify(value) || 'null';
+          const safeValue = JSON.stringify(value) || 'null';
+          return safeValue;
         } catch {
           return 'null';
         }
