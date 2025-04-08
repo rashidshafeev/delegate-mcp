@@ -12,36 +12,75 @@ Expected ',' or ']' after array element in JSON at position 5 (line 1 column 6)
 
 We've implemented multiple approaches to solve this issue:
 
+### Pure JavaScript Direct Server (Recommended)
+
+The most reliable solution is the pure JavaScript direct server implementation:
+
+```bash
+npm run server:direct
+```
+
+This server:
+1. Does not require TypeScript compilation
+2. Uses pure JavaScript with no dependencies on the TypeScript SDK
+3. Manually constructs JSON in a format compatible with Claude
+4. Works directly with Node.js without requiring any build step
+
 ### DirectTransport Solution
 
-Our latest solution uses a completely custom DirectTransport implementation that:
+Our TypeScript solution uses a custom DirectTransport implementation:
 
 1. Manually constructs JSON strings using templates
 2. Carefully formats messages to avoid JSON parsing issues
 3. Provides detailed logging of message contents
 
-This solution (added in commit 24ebff9) should provide the most reliable compatibility with Claude's strict JSON parser.
+This solution requires TypeScript compilation:
+
+```bash
+npm run build
+npm start
+```
 
 ### Debugging Options
 
 We've added several debugging tools to help troubleshoot JSON parsing issues:
 
-1. **Simple Debug**: Runs basic JSON serialization tests
+1. **JavaScript Direct Server** (Recommended for Claude):
+   ```bash
+   npm run server:direct
+   ```
+
+2. **Simple Debug** (Requires ts-node with ESM support):
    ```bash
    npm run debug:simple
    ```
 
-2. **Minimal Server**: Tests a minimal MCP server implementation
+3. **Minimal Server** (Requires ts-node with ESM support):
    ```bash
    npm run debug:minimal
    ```
 
-3. **Direct Transport**: Tests our custom Claude-compatible transport
+All debugging tools create detailed logs in the `logs/` directory that you can examine to identify JSON parsing issues.
+
+## Windows Compatibility Issues
+
+If you're experiencing issues running the TypeScript debug scripts on Windows:
+
+1. Use the pure JavaScript implementation instead:
    ```bash
-   npm run debug:direct
+   npm run server:direct
    ```
 
-All debugging tools create detailed logs in the `logs/` directory that you can examine to identify JSON parsing issues.
+2. Install ts-node globally:
+   ```bash
+   npm install -g ts-node
+   ```
+
+3. Run the compiled JavaScript version:
+   ```bash
+   npm run build
+   npm start
+   ```
 
 ## Gemini API Key Issues
 
@@ -76,7 +115,8 @@ If you're experiencing issues:
 
 3. Check the logs directory for detailed diagnostic information:
    ```
-   logs/direct-transport-*.log
+   logs/direct-js-*.log  # Logs from pure JavaScript server
+   logs/direct-transport-*.log  # Logs from TypeScript DirectTransport
    ```
 
 4. Use the `check` command to verify provider availability:
@@ -109,10 +149,12 @@ If you're experiencing issues:
 ## Client-Specific Issues
 
 ### Claude
-- We now use a custom DirectTransport implementation specifically for Claude compatibility
-- DirectTransport manually crafts JSON-RPC messages using string templates
-- Detailed logging helps identify JSON parsing issues
-- Use the `--claude` flag to force Claude compatibility mode
+- We recommend using the pure JavaScript implementation for Claude:
+  ```bash
+  npm run server:direct
+  ```
+- This implementation works without TypeScript compilation and ensures maximum compatibility
+- Detailed logs are created in the `logs/` directory
 
 ### Other Clients
 - Make sure the client supports MCP protocol version "2024-11-05"
