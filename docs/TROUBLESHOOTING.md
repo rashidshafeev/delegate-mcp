@@ -23,7 +23,13 @@ The current version (post-fix in commit 71451520) should work with Claude, but i
    LOG_LEVEL=debug npm start
    ```
 
-2. If you see specific JSON format errors in the logs, you may need to further modify the `PatchedStdioServerTransport` class in `src/utils/patched-stdio.ts` to handle edge cases.
+2. Use the debug test utility to check JSON formatting:
+   ```
+   npm run debug:json
+   ```
+   This will run test cases with various JSON structures and output the formatted results.
+
+3. If you see specific JSON format errors in the logs, you may need to further modify the `PatchedStdioServerTransport` class in `src/utils/patched-stdio.ts` to handle edge cases.
 
 ## Common Claude-specific JSON Issues
 
@@ -65,12 +71,21 @@ If you're experiencing issues:
    LOG_LEVEL=debug npm start
    ```
 
-2. Check the logs for detailed information about:
+2. Use the built-in debug test utilities:
+   ```bash
+   # Test JSON formatting
+   npm run debug:json
+   
+   # Or with the compiled version
+   npm run debug:json:build
+   ```
+
+3. Check the logs for detailed information about:
    - Exact JSON being sent and received
    - API calls to Gemini and GitHub
    - Any errors occurring during processing
 
-3. Use the `check` command to verify provider availability:
+4. Use the `check` command to verify provider availability:
    ```bash
    npm start -- check
    ```
@@ -103,6 +118,7 @@ If you're experiencing issues:
 - We've implemented special JSON serialization to work around Claude's JSON parsing issues
 - If still encountering problems, check logs for exact JSON format issues
 - The latest fixes (as of commit 71451520) include enhanced array handling and string escaping
+- Use the debug:json script to test JSON formatting in isolation
 
 ### Other Clients
 - Make sure the client supports MCP protocol version "2024-11-05"
