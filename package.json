@@ -17,7 +17,8 @@
     "debug:simple": "ts-node --esm src/utils/simple-debug.ts",
     "debug:minimal": "ts-node --esm src/utils/minimal-server.ts",
     "debug:direct": "ts-node --esm src/utils/direct-transport.ts",
-    "debug:direct-compiled": "tsc && node dist/utils/direct-transport.js"
+    "debug:direct-compiled": "tsc && node dist/utils/direct-transport.js",
+    "server:direct": "node direct-server.js"
   },
   "author": "",
   "license": "MIT",
