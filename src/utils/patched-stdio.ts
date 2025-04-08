@@ -62,7 +62,7 @@ export class PatchedStdioServerTransport extends StdioServerTransport {
     
     // Handle method
     if ('method' in obj && obj.method) {
-      properties.push(`"method":"${obj.method}"`);
+      properties.push(`"method":"${this.escapeString(obj.method)}"`);
     }
     
     // Handle params
@@ -91,6 +91,7 @@ export class PatchedStdioServerTransport extends StdioServerTransport {
   
   /**
    * Helper to stringify values with special handling for objects, arrays, and primitives
+   * Enhanced with extra validation for arrays to prevent malformed JSON
    */
   private stringifyValue(value: any): string {
     if (value === null) {
@@ -105,7 +106,7 @@ export class PatchedStdioServerTransport extends StdioServerTransport {
     switch (typeof value) {
       case 'string':
         // Escape quotes and special characters
-        return `"${value.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"`;
+        return `"${this.escapeString(value)}"`;
         
       case 'number':
       case 'boolean':
@@ -113,22 +114,67 @@ export class PatchedStdioServerTransport extends StdioServerTransport {
         
       case 'object':
         if (Array.isArray(value)) {
-          // Handle arrays
-          return `[${value.map(item => this.stringifyValue(item)).join(',')}]`;
+          // Handle arrays with extra validation
+          if (value.length === 0) {
+            return '[]'; // Empty array case
+          }
+          
+          // Map each item and join with commas
+          const items = value.map(item => {
+            // Ensure each item is properly stringified
+            const stringified = this.stringifyValue(item);
+            return stringified;
+          });
+          
+          // Extra validation step: ensure no undefined or problematic values
+          const validItems = items.filter(item => item !== undefined && item !== 'undefined');
+          
+          // Format with extra spacing to avoid parsing issues
+          return `[${validItems.join(',')}]`;
         } else {
           // Handle objects
           const properties: string[] = [];
           
           for (const [key, propValue] of Object.entries(value)) {
-            properties.push(`"${key}":${this.stringifyValue(propValue)}`);
+            // Skip undefined values
+            if (propValue === undefined) continue;
+            
+            // Ensure key is properly escaped
+            const escapedKey = this.escapeString(key);
+            properties.push(`"${escapedKey}":${this.stringifyValue(propValue)}`);
           }
           
           return `{${properties.join(',')}}`;
         }
         
       default:
-        // Fallback to built-in stringify for other types
-        return JSON.stringify(value);
+        // Use safer approach for unknown types
+        try {
+          return JSON.stringify(value) || 'null';
+        } catch {
+          return 'null';
+        }
     }
+  }
+  
+  /**
+   * Properly escape a string for JSON with extra caution
+   */
+  private escapeString(str: string): string {
+    if (typeof str !== 'string') {
+      return '';
+    }
+    
+    return str
+      .replace(/\\/g, '\\\\')  // Backslash
+      .replace(/"/g, '\\"')    // Double quotes
+      .replace(/\n/g, '\\n')   // Newlines
+      .replace(/\r/g, '\\r')   // Carriage returns
+      .replace(/\t/g, '\\t')   // Tabs
+      .replace(/\f/g, '\\f')   // Form feeds
+      .replace(/[\u0000-\u001F\u007F-\u009F]/g, match => {
+        // Control characters as unicode escape sequences
+        return '\\u' + ('0000' + match.charCodeAt(0).toString(16)).slice(-4);
+      });
   }
 }
