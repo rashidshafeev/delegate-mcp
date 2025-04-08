@@ -17,9 +17,16 @@ export class PatchedStdioServerTransport extends StdioServerTransport {
       // First, log the exact message we're sending
       logger.debug(`Original message: ${JSON.stringify(message)}`);
       
-      // Extremely conservative approach - manually construct the JSON
-      // This avoids any potential issues with JSON.stringify
-      let jsonString = this.manualJsonStringify(message);
+      // IMPLEMENTATION NOTE:
+      // Claude appears to have a strict JSON parser that doesn't handle some edge cases well
+      // We're bypassing the standard JSON.stringify and generating JSON manually
+      // to ensure maximum compatibility
+      
+      // Method 1: Use built-in JSON.stringify with custom replacer for safety
+      // const safeJson = JSON.stringify(message, this.jsonReplacer);
+      
+      // Method 2 (more reliable): Manual JSON construction
+      let jsonString = this.constructJsonMessage(message);
       
       // Add a newline at the end
       jsonString += '\n';
@@ -42,119 +49,121 @@ export class PatchedStdioServerTransport extends StdioServerTransport {
   }
   
   /**
-   * Manual JSON stringify that's extremely careful about formatting
-   * This avoids any potential issues with standard JSON.stringify
+   * Safest approach: Construct the JSON-RPC message manually
+   * This gives us complete control over the formatting
    */
-  private manualJsonStringify(obj: JSONRPCMessage): string {
-    // Start with an empty object
-    let result = '{';
+  private constructJsonMessage(message: JSONRPCMessage): string {
+    // Always start with the envelope
+    let jsonString = '{"jsonrpc":"2.0"';
     
-    // Handle each property manually
-    const properties: string[] = [];
-    
-    // Always put jsonrpc first
-    properties.push(`"jsonrpc":"2.0"`);
-    
-    // Handle id
-    if ('id' in obj && obj.id !== undefined) {
-      properties.push(`"id":${typeof obj.id === 'string' ? `"${this.escapeString(obj.id)}"` : obj.id}`);
+    // Add the ID if present
+    if ('id' in message && message.id !== undefined) {
+      const idValue = typeof message.id === 'string' 
+        ? `"${this.escapeString(message.id)}"`
+        : message.id;
+      jsonString += `,"id":${idValue}`;
     }
     
-    // Handle method
-    if ('method' in obj && obj.method) {
-      properties.push(`"method":"${this.escapeString(obj.method)}"`);
+    // Add method if present
+    if ('method' in message && message.method) {
+      jsonString += `,"method":"${this.escapeString(message.method)}"`;
     }
     
-    // Handle params
-    if ('params' in obj && obj.params) {
-      properties.push(`"params":${this.stringifyValue(obj.params)}`);
+    // Add params if present
+    if ('params' in message && message.params) {
+      jsonString += `,"params":${this.stringifyValue(message.params)}`;
     }
     
-    // Handle result - ensure it's always an object type for Claude compatibility
-    if ('result' in obj && obj.result !== undefined) {
-      // Make sure to serialize result as an object
-      properties.push(`"result":${this.stringifyValue(obj.result)}`);
+    // Add result if present
+    if ('result' in message && message.result !== undefined) {
+      jsonString += `,"result":${this.stringifyValue(message.result)}`;
     }
     
-    // Handle error
-    if ('error' in obj && obj.error) {
-      properties.push(`"error":${this.stringifyValue(obj.error)}`);
+    // Add error if present
+    if ('error' in message && message.error) {
+      jsonString += `,"error":${this.stringifyValue(message.error)}`;
     }
     
-    // Join properties with commas
-    result += properties.join(',');
+    // Close the object
+    jsonString += '}';
     
-    // Close object
-    result += '}';
-    
-    return result;
+    return jsonString;
   }
   
   /**
-   * Helper to stringify values with special handling for objects, arrays, and primitives
-   * Enhanced with extra validation for arrays to prevent malformed JSON
+   * JSON replacer function for standard JSON.stringify
+   */
+  private jsonReplacer(key: string, value: any): any {
+    // Handle undefined values
+    if (value === undefined) {
+      return null;
+    }
+    
+    // Handle arrays with potential undefined values
+    if (Array.isArray(value)) {
+      return value.map(item => item === undefined ? null : item);
+    }
+    
+    return value;
+  }
+  
+  /**
+   * Stringifies a value to JSON with special handling for arrays and objects
    */
   private stringifyValue(value: any): string {
+    // Handle null
     if (value === null) {
       return 'null';
     }
     
+    // Handle undefined (treat as null)
     if (value === undefined) {
       return 'null';
     }
     
-    // Handle various types
-    switch (typeof value) {
+    // Handle different types
+    const type = typeof value;
+    
+    switch (type) {
       case 'string':
-        // Escape quotes and special characters
         return `"${this.escapeString(value)}"`;
         
       case 'number':
-      case 'boolean':
-        return String(value);
-        
-      case 'object':
-        if (Array.isArray(value)) {
-          // Handle arrays with extra validation
-          if (value.length === 0) {
-            return '[]'; // Empty array case
-          }
-          
-          // Map each item and join with commas
-          const items = value.map(item => {
-            // Skip undefined values
-            if (item === undefined) return null;
-            
-            // Ensure each item is properly stringified
-            return this.stringifyValue(item);
-          }).filter(item => item !== undefined);
-          
-          // Format with proper spacing between array elements
-          return `[${items.join(',')}]`;
-        } else {
-          // Handle objects
-          const properties: string[] = [];
-          
-          for (const [key, propValue] of Object.entries(value)) {
-            // Skip undefined values
-            if (propValue === undefined) continue;
-            
-            // Ensure key is properly escaped
-            const escapedKey = this.escapeString(key);
-            properties.push(`"${escapedKey}":${this.stringifyValue(propValue)}`);
-          }
-          
-          return `{${properties.join(',')}}`; 
-        }
-        
-      default:
-        // Use safer approach for unknown types
-        try {
-          const safeValue = JSON.stringify(value) || 'null';
-          return safeValue;
-        } catch {
+        // Handle NaN and Infinity
+        if (isNaN(value) || !isFinite(value)) {
           return 'null';
         }
+        return String(value);
+        
+      case 'boolean':
+        return value ? 'true' : 'false';
+        
+      case 'object':
+        // Handle arrays
+        if (Array.isArray(value)) {
+          if (value.length === 0) {
+            return '[]';
+          }
+          
+          const items = value.map(item => {
+            return this.stringifyValue(item === undefined ? null : item);
+          });
+          
+          return `[${items.join(',')}]`;
+        }
+        
+        // Handle objects
+        const properties: string[] = [];
+        for (const [key, propValue] of Object.entries(value)) {
+          if (propValue !== undefined) { // Skip undefined values
+            properties.push(`"${this.escapeString(key)}":${this.stringifyValue(propValue)}`);
+          }
+        }
+        
+        return `{${properties.join(',')}}`;
+        
+      default:
+        return 'null'; // Functions, symbols, etc. become null
     }
   }
   
@@ -166,16 +175,31 @@ export class PatchedStdioServerTransport extends StdioServerTransport {
       return '';
     }
     
-    return str
-      .replace(/\\/g, '\\\\')  // Backslash
-      .replace(/"/g, '\\"')    // Double quotes
-      .replace(/\n/g, '\\n')   // Newlines
-      .replace(/\r/g, '\\r')   // Carriage returns
-      .replace(/\t/g, '\\t')   // Tabs
-      .replace(/\f/g, '\\f')   // Form feeds
-      .replace(/[\u0000-\u001F\u007F-\u009F]/g, match => {
-        // Control characters as unicode escape sequences
-        return '\\u' + ('0000' + match.charCodeAt(0).toString(16)).slice(-4);
-      });
+    let result = '';
+    
+    // Process each character individually for maximum control
+    for (let i = 0; i < str.length; i++) {
+      const char = str[i];
+      const code = str.charCodeAt(i);
+      
+      if (code < 32 || code > 126) {
+        // Control characters and non-ASCII: use Unicode escape sequence
+        result += '\\u' + ('0000' + code.toString(16)).slice(-4);
+      } else {
+        // Handle specific escape sequences
+        switch (char) {
+          case '\\': result += '\\\\'; break;
+          case '"': result += '\\"'; break;
+          case '\b': result += '\\b'; break;
+          case '\f': result += '\\f'; break;
+          case '\n': result += '\\n'; break;
+          case '\r': result += '\\r'; break;
+          case '\t': result += '\\t'; break;
+          default: result += char;
+        }
+      }
+    }
+    
+    return result;
   }
 }
