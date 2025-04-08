@@ -14,8 +14,30 @@ This is due to a compatibility issue with how Claude's MCP client parses JSON re
 
 1. Added a patched stdio transport that formats JSON in a more compatible way
 2. Added debug transport wrapper to log all messages for troubleshooting
+3. Implemented enhanced array handling and string escaping in JSON serialization
 
-The current version should work with Claude, but if you still encounter issues, please report them.
+The current version (post-fix in commit 71451520) should work with Claude, but if you still encounter issues, try these additional steps:
+
+1. Enable debug logging to see the exact JSON being sent/received:
+   ```
+   LOG_LEVEL=debug npm start
+   ```
+
+2. If you see specific JSON format errors in the logs, you may need to further modify the `PatchedStdioServerTransport` class in `src/utils/patched-stdio.ts` to handle edge cases.
+
+## Common Claude-specific JSON Issues
+
+Claude's JSON parser can be particularly sensitive to:
+
+1. Control characters in strings
+2. Arrays with undefined or complex values
+3. Nested arrays or objects with inconsistent formatting
+
+If you continue to experience issues, try these approaches:
+
+1. Set `LOG_LEVEL=debug` to see all transmitted JSON
+2. Look for patterns in the error messages (position numbers can help identify the problematic part)
+3. Consider simplifying complex data structures in responses
 
 ## Gemini API Key Issues
 
@@ -80,6 +102,7 @@ If you're experiencing issues:
 ### Claude
 - We've implemented special JSON serialization to work around Claude's JSON parsing issues
 - If still encountering problems, check logs for exact JSON format issues
+- The latest fixes (as of commit 71451520) include enhanced array handling and string escaping
 
 ### Other Clients
 - Make sure the client supports MCP protocol version "2024-11-05"
