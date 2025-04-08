@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import { startMcpServer } from './mcp/server.js';
+import { createMcpServer } from './mcp/server.js';
 import { initializeProviders, getAvailableProviders } from './providers/index.js';
 import { config } from './utils/config.js';
 import { logger, LogLevel } from './utils/logger.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import { DirectTransport } from './utils/direct-transport.js';
 
 // Get package version from package.json
 const __filename = fileURLToPath(import.meta.url);
@@ -34,8 +35,25 @@ if (process.argv.length <= 2) {
         logger.warn('Gemini provider is not available. Please check your GEMINI_API_KEY environment variable.');
       }
       
-      // Start the server
-      await startMcpServer();
+      // Create server instance
+      const server = createMcpServer();
+      
+      // Detect if we're running in Claude
+      const isClaudeClient = detectClaudeClient();
+      
+      if (isClaudeClient) {
+        logger.info('Claude client detected, using DirectTransport');
+        // Use our custom direct transport for Claude
+        const transport = new DirectTransport();
+        await server.connect(transport);
+      } else {
+        logger.info('Using standard MCP transport');
+        // Start the server with standard transport for other clients
+        const transport = new DirectTransport(); // Try direct transport for all clients
+        await server.connect(transport);
+      }
+      
+      logger.success('MCP server started');
       
       // We don't exit here as the server will keep running
     } catch (error) {
@@ -58,6 +76,7 @@ if (process.argv.length <= 2) {
     .description('Start the MCP server')
     .option('-d, --debug', 'Enable debug logging')
     .option('-c, --config <path>', 'Path to a configuration file')
+    .option('--claude', 'Force Claude compatibility mode')
     .action(async (options) => {
       try {
         // Set log level if debug flag is provided
@@ -80,8 +99,21 @@ if (process.argv.length <= 2) {
           throw new Error('Gemini provider is not available. Please check your GEMINI_API_KEY environment variable.');
         }
         
-        // Start the server
-        await startMcpServer();
+        // Create server instance
+        const server = createMcpServer();
+        
+        // Choose transport based on options
+        if (options.claude) {
+          logger.info('Using Claude compatibility mode with DirectTransport');
+          const transport = new DirectTransport();
+          await server.connect(transport);
+        } else {
+          logger.info('Using standard MCP transport');
+          const transport = new DirectTransport(); // Use direct transport for all clients
+          await server.connect(transport);
+        }
+        
+        logger.success('MCP server started');
         
         // We don't exit here as the server will keep running
       } catch (error) {
@@ -125,4 +157,22 @@ if (process.argv.length <= 2) {
 
   // Run the program
   program.parse(process.argv);
+}
+
+/**
+ * Attempt to detect if the client is Claude based on environment or context
+ */
+function detectClaudeClient(): boolean {
+  // Check environment variables
+  if (process.env.CLAUDE_CLIENT === 'true') {
+    return true;
+  }
+  
+  // Check for Claude-specific signatures in the environment
+  // This is just a heuristic and may need adjustment
+  const isClaudeContext = 
+    process.env.ANTHROPIC_API_KEY !== undefined ||
+    process.env.CLAUDE_API_KEY !== undefined;
+  
+  return isClaudeContext;
 }
