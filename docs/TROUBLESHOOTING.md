@@ -10,24 +10,38 @@ If you're using Claude as an MCP client and see errors like:
 Expected ',' or ']' after array element in JSON at position 5 (line 1 column 6)
 ```
 
-We've implemented a solution by using the standard MCP SDK's StdioServerTransport for maximum compatibility.
+We've implemented multiple approaches to solve this issue:
 
-### Solution
+### DirectTransport Solution
 
-After extensive testing, we found that the most reliable solution is:
+Our latest solution uses a completely custom DirectTransport implementation that:
 
-1. **Use the standard transport**: We now use the standard `StdioServerTransport` from the MCP SDK without any customization
-2. **Set NODE_ENV to production**: This improves JSON stability for Claude's parser
-3. **Avoid custom JSON serialization**: Removing our custom JSON handling eliminated the parsing errors
+1. Manually constructs JSON strings using templates
+2. Carefully formats messages to avoid JSON parsing issues
+3. Provides detailed logging of message contents
 
-If you still encounter JSON parsing issues:
+This solution (added in commit 24ebff9) should provide the most reliable compatibility with Claude's strict JSON parser.
 
-1. Make sure you have the latest version of delegate-mcp (requires commit afb97e3 or later)
-2. Ensure you're using the latest version of the MCP SDK
-3. Run with debug logging to see the exact messages being sent/received:
+### Debugging Options
+
+We've added several debugging tools to help troubleshoot JSON parsing issues:
+
+1. **Simple Debug**: Runs basic JSON serialization tests
+   ```bash
+   npm run debug:simple
    ```
-   LOG_LEVEL=debug npm start
+
+2. **Minimal Server**: Tests a minimal MCP server implementation
+   ```bash
+   npm run debug:minimal
    ```
+
+3. **Direct Transport**: Tests our custom Claude-compatible transport
+   ```bash
+   npm run debug:direct
+   ```
+
+All debugging tools create detailed logs in the `logs/` directory that you can examine to identify JSON parsing issues.
 
 ## Gemini API Key Issues
 
@@ -55,12 +69,17 @@ If you're experiencing issues:
    LOG_LEVEL=debug npm start
    ```
 
-2. Check the logs for detailed information about:
-   - Exact JSON being sent and received
-   - API calls to Gemini and GitHub
-   - Any errors occurring during processing
+2. Force Claude compatibility mode:
+   ```bash
+   npm start -- start --claude
+   ```
 
-3. Use the `check` command to verify provider availability:
+3. Check the logs directory for detailed diagnostic information:
+   ```
+   logs/direct-transport-*.log
+   ```
+
+4. Use the `check` command to verify provider availability:
    ```bash
    npm start -- check
    ```
@@ -90,9 +109,10 @@ If you're experiencing issues:
 ## Client-Specific Issues
 
 ### Claude
-- We now use the standard MCP SDK transport implementation for Claude compatibility
-- Setting `NODE_ENV=production` in the environment helps improve stability
-- If you're still encountering issues, please create a GitHub issue with detailed logs
+- We now use a custom DirectTransport implementation specifically for Claude compatibility
+- DirectTransport manually crafts JSON-RPC messages using string templates
+- Detailed logging helps identify JSON parsing issues
+- Use the `--claude` flag to force Claude compatibility mode
 
 ### Other Clients
 - Make sure the client supports MCP protocol version "2024-11-05"
