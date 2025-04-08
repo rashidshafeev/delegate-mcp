@@ -1,178 +1,113 @@
-#!/usr/bin/env node
+/**
+ * Main entry point for delegate-mcp
+ * 
+ * This service implements two MCP tools:
+ * 1. prepare_context - Packages files into a context document and saves to GitHub
+ * 2. delegate - Delegates requests to Gemini with context from file paths
+ */
 
-import { Command } from 'commander';
-import { createMcpServer } from './mcp/server.js';
-import { initializeProviders, getAvailableProviders } from './providers/index.js';
-import { config } from './utils/config.js';
-import { logger, LogLevel } from './utils/logger.js';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import fs from 'fs';
+import { logger } from './utils/logger.js';
+import { startMcpServer } from './mcp/server.js';
 import { DirectTransport } from './utils/direct-transport.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-// Get package version from package.json
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const packageJsonPath = path.join(__dirname, '..', 'package.json');
-const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+// Enable production mode for better Claude compatibility
+process.env.NODE_ENV = process.env.NODE_ENV || 'production';
 
-// Check if we're being run via MCP (no arguments, just stdin/stdout)
-if (process.argv.length <= 2) {
-  // If no arguments are provided, assume we're being run by an MCP client
-  // and start the server directly
-  logger.info('Starting MCP server in direct mode');
-  
-  // Setup environment for proper JSON handling with Claude
-  process.env.NODE_ENV = 'production';
-  
-  (async () => {
-    try {
-      // Initialize providers (only Gemini)
-      initializeProviders();
-      const providers = getAvailableProviders();
-      
-      if (providers.length === 0) {
-        logger.warn('Gemini provider is not available. Please check your GEMINI_API_KEY environment variable.');
-      }
-      
-      // Create server instance
-      const server = createMcpServer();
-      
-      // Detect if we're running in Claude
-      const isClaudeClient = detectClaudeClient();
-      
-      if (isClaudeClient) {
-        logger.info('Claude client detected, using DirectTransport');
-        // Use our custom direct transport for Claude
-        const transport = new DirectTransport();
-        await server.connect(transport);
-      } else {
-        logger.info('Using standard MCP transport');
-        // Start the server with standard transport for other clients
-        const transport = new DirectTransport(); // Try direct transport for all clients
-        await server.connect(transport);
-      }
-      
-      logger.success('MCP server started');
-      
-      // We don't exit here as the server will keep running
-    } catch (error) {
-      logger.error(`Failed to start MCP server: ${(error as Error).message}`);
-      process.exit(1);
-    }
-  })();
-} else {
-  // Create commander program for CLI usage
-  const program = new Command();
-
-  program
-    .name('delegate-mcp')
-    .description('MCP implementation for Gemini context preparation and delegation')
-    .version(packageJson.version);
-
-  // Start command - start the MCP server
-  program
-    .command('start')
-    .description('Start the MCP server')
-    .option('-d, --debug', 'Enable debug logging')
-    .option('-c, --config <path>', 'Path to a configuration file')
-    .option('--claude', 'Force Claude compatibility mode')
-    .action(async (options) => {
-      try {
-        // Set log level if debug flag is provided
-        if (options.debug) {
-          logger.setLevel(LogLevel.DEBUG);
-          logger.debug('Debug logging enabled');
-        }
-        
-        // Load config from file if provided
-        if (options.config) {
-          logger.info(`Loading configuration from ${options.config}`);
-          config.loadFromFile(options.config);
-        }
-        
-        // Initialize providers (only Gemini)
-        initializeProviders();
-        const providers = getAvailableProviders();
-        
-        if (providers.length === 0) {
-          throw new Error('Gemini provider is not available. Please check your GEMINI_API_KEY environment variable.');
-        }
-        
-        // Create server instance
-        const server = createMcpServer();
-        
-        // Choose transport based on options
-        if (options.claude) {
-          logger.info('Using Claude compatibility mode with DirectTransport');
-          const transport = new DirectTransport();
-          await server.connect(transport);
-        } else {
-          logger.info('Using standard MCP transport');
-          const transport = new DirectTransport(); // Use direct transport for all clients
-          await server.connect(transport);
-        }
-        
-        logger.success('MCP server started');
-        
-        // We don't exit here as the server will keep running
-      } catch (error) {
-        logger.error(`Failed to start MCP server: ${(error as Error).message}`);
-        process.exit(1);
-      }
-    });
-
-  // Check command - check if Gemini provider is available
-  program
-    .command('check')
-    .description('Check availability of Gemini provider')
-    .action(async () => {
-      try {
-        logger.info('Checking Gemini provider...');
-        
-        // Initialize provider
-        initializeProviders();
-        
-        // Get available providers
-        const providers = getAvailableProviders();
-        
-        if (providers.length === 0) {
-          logger.error('Gemini provider is not available. Please check your GEMINI_API_KEY environment variable.');
-          process.exit(1);
-        }
-        
-        logger.success('Gemini provider is available');
-        
-        // Log available models
-        const provider = providers[0];
-        const models = await provider.getAvailableModels();
-        logger.info(`Available Gemini models: ${models.join(', ')}`);
-        
-        process.exit(0);
-      } catch (error) {
-        logger.error(`Error checking provider: ${(error as Error).message}`);
-        process.exit(1);
-      }
-    });
-
-  // Run the program
-  program.parse(process.argv);
+/**
+ * Main function to start the application
+ */
+async function main(): Promise<void> {
+  try {
+    logger.info('Starting delegate-mcp...');
+    
+    // Start MCP server with DirectTransport for improved Claude compatibility
+    logger.info('Using DirectTransport for all clients to ensure cross-compatibility');
+    const server = await startDirectMcpServer();
+    
+    logger.success('delegate-mcp is running');
+    
+    // Handle shutdown
+    setupShutdownHandlers(server);
+  } catch (error) {
+    logger.error(`Failed to start application: ${(error as Error).message}`);
+    process.exit(1);
+  }
 }
 
 /**
- * Attempt to detect if the client is Claude based on environment or context
+ * Start MCP server with DirectTransport
  */
-function detectClaudeClient(): boolean {
-  // Check environment variables
-  if (process.env.CLAUDE_CLIENT === 'true') {
-    return true;
-  }
+async function startDirectMcpServer(): Promise<McpServer> {
+  const server = new McpServer(
+    { name: 'delegate-mcp', version: '0.1.0' },
+    { capabilities: { tools: {} } }
+  );
   
-  // Check for Claude-specific signatures in the environment
-  // This is just a heuristic and may need adjustment
-  const isClaudeContext = 
-    process.env.ANTHROPIC_API_KEY !== undefined ||
-    process.env.CLAUDE_API_KEY !== undefined;
+  // Register tools
+  await registerTools(server);
   
-  return isClaudeContext;
+  // Use DirectTransport for all clients
+  logger.info('Connecting server with DirectTransport');
+  const transport = new DirectTransport();
+  await server.connect(transport);
+  
+  return server;
 }
+
+/**
+ * Register MCP tools with the server
+ */
+async function registerTools(server: McpServer): Promise<void> {
+  const { registerPrepareContextTool, registerDelegateTool } = await import('./mcp/server.js');
+  
+  // Register tools directly using imported functions
+  registerPrepareContextTool(server);
+  registerDelegateTool(server);
+}
+
+/**
+ * Set up handlers for graceful shutdown
+ */
+function setupShutdownHandlers(server: McpServer): void {
+  // Handle SIGINT (Ctrl+C)
+  process.on('SIGINT', async () => {
+    logger.info('Received SIGINT, shutting down...');
+    await shutdownGracefully(server);
+  });
+  
+  // Handle SIGTERM (kill)
+  process.on('SIGTERM', async () => {
+    logger.info('Received SIGTERM, shutting down...');
+    await shutdownGracefully(server);
+  });
+  
+  // Handle uncaught exceptions
+  process.on('uncaughtException', async (error) => {
+    logger.error(`Uncaught exception: ${error.message}`);
+    logger.error(error.stack || 'No stack trace available');
+    await shutdownGracefully(server);
+  });
+}
+
+/**
+ * Gracefully shut down the application
+ */
+async function shutdownGracefully(server: McpServer): Promise<void> {
+  try {
+    logger.info('Closing MCP server...');
+    await server.close();
+    logger.success('Shutdown complete');
+  } catch (error) {
+    logger.error(`Error during shutdown: ${(error as Error).message}`);
+  } finally {
+    process.exit(0);
+  }
+}
+
+// Run the main function
+main().catch(error => {
+  console.error(`Fatal error: ${error.message}`);
+  console.error(error.stack);
+  process.exit(1);
+});
