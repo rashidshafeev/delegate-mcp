@@ -1,6 +1,6 @@
 /**
  * Direct transport for MCP server that bypasses standard JSON serialization
- * Run with: npx ts-node src/utils/direct-transport.ts
+ * Run with: npx ts-node-esm src/utils/direct-transport.ts
  * 
  * This is a last-resort approach that manually crafts the JSON-RPC messages.
  */
@@ -85,19 +85,20 @@ export class DirectTransport implements Transport {
     private stdout: Writable = process.stdout
   ) {}
 
-  onclose?: () => void;
-  onerror?: (error: Error) => void;
-  onmessage?: (message: JSONRPCMessage) => void;
+  // Interface required properties
+  public onclose?: () => void;
+  public onmessage?: (message: JSONRPCMessage) => void;
+  public onerror?: (error: Error) => void;
 
   // Event handlers
-  private ondata = (chunk: Buffer) => {
+  private onDataHandler = (chunk: Buffer) => {
     this.readBuffer.append(chunk);
     this.processReadBuffer();
   };
   
-  private onerror = (error: Error) => {
+  private onErrorHandler = (error: Error) => {
     log(`Transport error: ${error.message}`);
-    this.onerror?.(error);
+    if (this.onerror) this.onerror(error);
   };
 
   async start(): Promise<void> {
@@ -106,8 +107,8 @@ export class DirectTransport implements Transport {
     }
 
     this.started = true;
-    this.stdin.on('data', this.ondata);
-    this.stdin.on('error', this.onerror);
+    this.stdin.on('data', this.onDataHandler);
+    this.stdin.on('error', this.onErrorHandler);
     
     log('Transport started');
   }
@@ -121,17 +122,17 @@ export class DirectTransport implements Transport {
         }
 
         log(`Received message: ${JSON.stringify(message)}`);
-        this.onmessage?.(message);
+        if (this.onmessage) this.onmessage(message);
       } catch (error) {
         log(`Error processing message: ${(error as Error).message}`);
-        this.onerror?.(error as Error);
+        if (this.onerror) this.onerror(error as Error);
       }
     }
   }
 
   async close(): Promise<void> {
-    this.stdin.off('data', this.ondata);
-    this.stdin.off('error', this.onerror);
+    this.stdin.off('data', this.onDataHandler);
+    this.stdin.off('error', this.onErrorHandler);
     
     const hasRemainingListeners = this.stdin.listenerCount('data') > 0;
     if (!hasRemainingListeners) {
@@ -139,7 +140,7 @@ export class DirectTransport implements Transport {
     }
     
     this.readBuffer.clear();
-    this.onclose?.();
+    if (this.onclose) this.onclose();
     
     log('Transport closed');
   }
@@ -286,8 +287,10 @@ async function main() {
 }
 
 // Run the server
-main().catch(error => {
-  log(`Fatal error: ${error.message}`);
-  log(`Stack: ${error.stack}`);
-  process.exit(1);
-});
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch(error => {
+    log(`Fatal error: ${error.message}`);
+    log(`Stack: ${error.stack}`);
+    process.exit(1);
+  });
+}
