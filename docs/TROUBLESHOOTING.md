@@ -18,6 +18,9 @@ The most reliable solution is the pure JavaScript direct server implementation:
 
 ```bash
 npm run server:direct
+# Or use the convenience scripts:
+./debug-direct.sh  # Unix
+debug-direct.cmd   # Windows
 ```
 
 This server:
@@ -34,11 +37,13 @@ Our TypeScript solution uses a custom DirectTransport implementation:
 2. Carefully formats messages to avoid JSON parsing issues
 3. Provides detailed logging of message contents
 
-This solution requires TypeScript compilation:
+This solution can be used with the regular start command (it's now the default):
 
 ```bash
-npm run build
 npm start
+# Or use the convenience scripts:
+./run-claude.sh  # Unix
+run-claude.cmd   # Windows
 ```
 
 ### Debugging Options
@@ -55,12 +60,31 @@ We've added several debugging tools to help troubleshoot JSON parsing issues:
    npm run debug:simple
    ```
 
-3. **Minimal Server** (Requires ts-node with ESM support):
+3. **Direct Transport** (TypeScript implementation):
    ```bash
-   npm run debug:minimal
+   npm run debug:direct
    ```
 
 All debugging tools create detailed logs in the `logs/` directory that you can examine to identify JSON parsing issues.
+
+## Position 5 JSON Parsing Error
+
+A common issue with Claude is the "position 5" JSON parsing error. This issue occurs when Claude's parser encounters unexpected characters at position 5 in the JSON stream.
+
+The error typically looks like:
+```
+Expected ',' or ']' after array element in JSON at position 5 (line 1 column 6)
+```
+
+Common causes:
+1. Characters with special meaning in JSON (e.g., control characters)
+2. Unicode characters that are not properly escaped
+3. Specific combinations of characters that confuse Claude's parser
+
+Our solution:
+1. The DirectTransport and pure JavaScript server implementations carefully construct JSON to avoid this issue
+2. Each character at position 5 is logged for debugging purposes
+3. The JSON is validated for proper structure before sending
 
 ## Windows Compatibility Issues
 
@@ -68,7 +92,7 @@ If you're experiencing issues running the TypeScript debug scripts on Windows:
 
 1. Use the pure JavaScript implementation instead:
    ```bash
-   npm run server:direct
+   debug-direct.cmd
    ```
 
 2. Install ts-node globally:
@@ -108,14 +132,14 @@ If you're experiencing issues:
    LOG_LEVEL=debug npm start
    ```
 
-2. Force Claude compatibility mode:
+2. Use the pure JavaScript server for maximum compatibility:
    ```bash
-   npm start -- start --claude
+   npm run server:direct
    ```
 
 3. Check the logs directory for detailed diagnostic information:
    ```
-   logs/direct-js-*.log  # Logs from pure JavaScript server
+   logs/direct-server-*.log  # Logs from pure JavaScript server
    logs/direct-transport-*.log  # Logs from TypeScript DirectTransport
    ```
 
