@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { logger } from '../utils/logger.js';
 import { prepareContextTool } from './tools/prepare-context.js';
 import { delegateTool } from './tools/delegate.js';
+import { DebugTransportWrapper } from '../utils/debug-transport.js';
 
 /**
  * Create and configure an MCP server with the prepare_context and delegate tools
@@ -31,7 +32,10 @@ export function createMcpServer(): McpServer {
  */
 export async function startMcpServer(): Promise<McpServer> {
   const server = createMcpServer();
-  const transport = new StdioServerTransport();
+  
+  // Create the transport with debug wrapper
+  const stdioTransport = new StdioServerTransport();
+  const transport = new DebugTransportWrapper(stdioTransport);
   
   logger.info('Starting MCP server with stdio transport');
   await server.connect(transport);
