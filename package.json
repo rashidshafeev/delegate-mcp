@@ -12,11 +12,12 @@
     "test:watch": "vitest",
     "lint": "eslint src/**/*.ts",
     "format": "prettier --write 'src/**/*.ts'",
-    "debug:json": "cross-env LOG_LEVEL=debug ts-node-esm src/utils/debug-test.ts",
+    "debug:json": "cross-env LOG_LEVEL=debug ts-node --esm src/utils/debug-test.ts",
     "debug:json:build": "cross-env LOG_LEVEL=debug node dist/utils/debug-test.js",
-    "debug:simple": "ts-node-esm src/utils/simple-debug.ts",
-    "debug:minimal": "ts-node-esm src/utils/minimal-server.ts",
-    "debug:direct": "ts-node-esm src/utils/direct-transport.ts"
+    "debug:simple": "ts-node --esm src/utils/simple-debug.ts",
+    "debug:minimal": "ts-node --esm src/utils/minimal-server.ts",
+    "debug:direct": "ts-node --esm src/utils/direct-transport.ts",
+    "debug:direct-compiled": "tsc && node dist/utils/direct-transport.js"
   },
   "author": "",
   "license": "MIT",
