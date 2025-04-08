@@ -1,6 +1,6 @@
 /**
  * Minimal MCP server for testing Claude compatibility
- * Run with: npx ts-node src/utils/minimal-server.ts
+ * Run with: npx ts-node-esm src/utils/minimal-server.ts
  * 
  * This is a stripped down server that only responds to basic commands.
  */
@@ -9,6 +9,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { existsSync, writeFileSync } from 'fs';
 import path from 'path';
+import { z } from 'zod';
 
 // Set production mode explicitly
 process.env.NODE_ENV = 'production';
@@ -56,7 +57,7 @@ async function main() {
       'echo',
       'Simple echo tool',
       {
-        message: { type: 'string' }
+        message: z.string().describe('Message to echo back')
       },
       async (request) => {
         logMessage(`Echo tool called with: ${JSON.stringify(request.params)}`);
@@ -88,4 +89,6 @@ async function main() {
 }
 
 // Start the server
-main();
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
+}
