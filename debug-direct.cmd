@@ -1,8 +1,8 @@
 @echo off
-echo Running direct transport debug test...
-echo The log file will be created in the logs directory.
-echo.
-npx ts-node-esm src/utils/direct-transport.ts
-echo.
-echo Check the logs directory for detailed output.
-pause
+REM Debug script for testing direct transport on Windows
+
+REM Set NODE_ENV to production to avoid development-specific behaviors
+set NODE_ENV=production
+
+REM Run the direct server implementation
+node direct-server.js
