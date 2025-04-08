@@ -1,24 +1,18 @@
-#!/usr/bin/env node
-
 /**
- * Simplified Direct Transport Server (JavaScript Version)
- * This file is a plain JavaScript implementation of the direct transport
- * that doesn't require TypeScript compilation.
+ * Pure JavaScript implementation of MCP server with direct JSON-RPC transport
  * 
- * Run with: node direct-server.js
+ * This is a simplified version that doesn't depend on TypeScript or the MCP SDK
+ * It's useful for compatibility testing and as a fallback in environments where
+ * TypeScript compilation might fail.
  */
 
-import { createRequire } from 'module';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import fs from 'fs';
-
-// Setup console for debugging
-console.error('Starting plain JS direct transport server...');
+// Import Node.js modules
+const fs = require('fs');
+const path = require('path');
+const { Readable, Writable } = require('stream');
 
 // Create log directory
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const logDir = path.resolve(__dirname, 'logs');
+const logDir = path.resolve(process.cwd(), 'logs');
 if (!fs.existsSync(logDir)) {
   try {
     fs.mkdirSync(logDir, { recursive: true });
@@ -27,25 +21,26 @@ if (!fs.existsSync(logDir)) {
   }
 }
 
-const logFile = path.join(logDir, `direct-js-${Date.now()}.log`);
-console.error(`Logging to: ${logFile}`);
-
+// Set up logging
+const logFile = path.join(logDir, `direct-server-${Date.now()}.log`);
 function log(message) {
   const timestamp = new Date().toISOString();
   const logEntry = `${timestamp} ${message}\n`;
   
-  // Log to stderr
+  // Log to stderr (doesn't interfere with stdout used for JSON-RPC)
   console.error(logEntry);
   
   // Log to file
   try {
-    fs.writeFileSync(logFile, logEntry, { flag: 'a' });
+    fs.appendFileSync(logFile, logEntry);
   } catch (error) {
     console.error('Failed to write to log file:', error);
   }
 }
 
-// Buffer for incoming messages
+log(`Starting direct server, logging to: ${logFile}`);
+
+// Buffer class for incoming messages
 class ReadBuffer {
   constructor() {
     this.buffer = null;
@@ -83,28 +78,138 @@ class ReadBuffer {
   }
 }
 
-// Simple server implementation
-class SimpleServer {
-  constructor() {
+// Main server class
+class DirectServer {
+  constructor(stdin = process.stdin, stdout = process.stdout) {
+    this.stdin = stdin;
+    this.stdout = stdout;
     this.readBuffer = new ReadBuffer();
-    this.started = false;
+    this.running = false;
     
-    // Bind methods
-    this.ondata = this.ondata.bind(this);
-    this.onerror = this.onerror.bind(this);
-    this.processReadBuffer = this.processReadBuffer.bind(this);
-    this.handleMessage = this.handleMessage.bind(this);
+    // Registered tools
+    this.tools = {
+      prepare_context: {
+        name: 'prepare_context',
+        description: 'Prepare context from file paths and save to GitHub',
+        schema: {
+          type: 'object',
+          properties: {
+            paths: { 
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Array of file or directory paths to include'
+            },
+            comment: { 
+              type: 'string',
+              description: 'Comment to append to the end of the context'
+            },
+            owner: {
+              type: 'string',
+              description: 'GitHub repository owner'
+            },
+            repo: {
+              type: 'string',
+              description: 'GitHub repository name'
+            },
+            branch: {
+              type: 'string',
+              description: 'GitHub repository branch'
+            }
+          },
+          required: ['paths']
+        },
+        handler: this.prepareContextHandler.bind(this)
+      },
+      delegate: {
+        name: 'delegate',
+        description: 'Delegate requests to Gemini with context from file paths',
+        schema: {
+          type: 'object',
+          properties: {
+            prompt: { 
+              type: 'string',
+              description: 'The prompt to send to the model'
+            },
+            paths: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Array of file paths to include as context'
+            },
+            comment: {
+              type: 'string',
+              description: 'Additional context comment'
+            },
+            model: {
+              type: 'string',
+              description: 'The model to use (only Gemini models supported)'
+            },
+            temperature: {
+              type: 'number',
+              description: 'Temperature for generation'
+            },
+            maxTokens: {
+              type: 'number',
+              description: 'Maximum tokens to generate'
+            },
+            realtime: {
+              type: 'boolean',
+              description: 'Whether to return results in realtime'
+            },
+            owner: {
+              type: 'string',
+              description: 'GitHub repository owner'
+            },
+            repo: {
+              type: 'string',
+              description: 'GitHub repository name'
+            },
+            branch: {
+              type: 'string',
+              description: 'GitHub repository branch'
+            }
+          },
+          required: ['prompt']
+        },
+        handler: this.delegateHandler.bind(this)
+      }
+    };
   }
-  
-  ondata(chunk) {
-    this.readBuffer.append(chunk);
-    this.processReadBuffer();
+
+  async start() {
+    if (this.running) {
+      throw new Error('Server already running');
+    }
+
+    this.running = true;
+    log('Direct MCP server starting...');
+
+    // Set up data handler
+    this.stdin.on('data', (chunk) => {
+      this.readBuffer.append(chunk);
+      this.processReadBuffer();
+    });
+
+    // Set up error handler
+    this.stdin.on('error', (error) => {
+      log(`Transport error: ${error.message}`);
+    });
+    
+    log('Server ready to process requests');
   }
-  
-  onerror(error) {
-    log(`Transport error: ${error.message}`);
+
+  async stop() {
+    this.stdin.removeAllListeners('data');
+    this.stdin.removeAllListeners('error');
+    
+    if (this.stdin.listenerCount('data') === 0) {
+      this.stdin.pause();
+    }
+    
+    this.readBuffer.clear();
+    this.running = false;
+    log('Server stopped');
   }
-  
+
   processReadBuffer() {
     while (true) {
       try {
@@ -112,190 +217,190 @@ class SimpleServer {
         if (message === null) {
           break;
         }
-        
+
         log(`Received message: ${JSON.stringify(message)}`);
         this.handleMessage(message);
       } catch (error) {
         log(`Error processing message: ${error.message}`);
-        this.onerror(error);
       }
     }
   }
-  
-  sendMessage(message) {
-    return new Promise((resolve) => {
-      // Log the message we're about to send
-      log(`Sending message: ${JSON.stringify(message)}`);
-      
-      // Creating JSON manually using string template
-      let jsonString = '';
-      
-      // Different handling based on message type
-      if (message.result !== undefined) {
-        // Handle response with result
-        jsonString = `{"jsonrpc":"2.0","id":${typeof message.id === 'string' ? `"${message.id}"` : message.id},"result":${JSON.stringify(message.result)}}\n`;
-      } else if (message.error !== undefined) {
-        // Handle error response  
-        jsonString = `{"jsonrpc":"2.0","id":${typeof message.id === 'string' ? `"${message.id}"` : message.id},"error":${JSON.stringify(message.error)}}\n`;
-      } else if (message.method !== undefined) {
-        // Handle request or notification
-        const hasId = message.id !== undefined;
-        const idPart = hasId ? `,"id":${typeof message.id === 'string' ? `"${message.id}"` : message.id}` : '';
-        const paramsPart = message.params ? `,"params":${JSON.stringify(message.params)}` : '';
-        
-        jsonString = `{"jsonrpc":"2.0","method":"${message.method}"${paramsPart}${idPart}}\n`;
-      }
-      
-      // Check position 5 in the message
-      if (jsonString.length > 5) {
-        log(`Character at position 5: '${jsonString.charAt(5)}' (ASCII: ${jsonString.charCodeAt(5)})`);
-      }
-      
-      // Write the JSON string to stdout
-      if (process.stdout.write(jsonString)) {
-        resolve();
-      } else {
-        process.stdout.once('drain', resolve);
-      }
-    });
-  }
-  
+
   async handleMessage(message) {
-    log(`Handling message: ${JSON.stringify(message)}`);
-    
-    // Handle initialize request
-    if (message.method === 'initialize' && message.id !== undefined) {
-      log('Responding to initialize request');
-      await this.sendMessage({
-        jsonrpc: '2.0',
-        id: message.id,
-        result: {
-          protocolVersion: '2024-11-05',
-          capabilities: { tools: {} },
-          serverInfo: { name: 'direct-js-server', version: '0.1.0' }
-        }
-      });
-    } 
-    // Handle tools/list request
-    else if (message.method === 'tools/list' && message.id !== undefined) {
-      log('Responding to tools/list request');
-      await this.sendMessage({
-        jsonrpc: '2.0',
-        id: message.id,
-        result: {
-          tools: [
-            {
-              name: 'echo',
-              description: 'Simple echo tool',
-              inputSchema: {
-                type: 'object',
-                properties: {
-                  message: { type: 'string' }
-                }
-              }
-            }
-          ]
-        }
-      });
+    // Ensure it's a JSON-RPC message
+    if (!message.jsonrpc || message.jsonrpc !== '2.0') {
+      log('Invalid JSON-RPC message');
+      return;
     }
-    // Handle initialized notification
+
+    // Handle different request types
+    if (message.method === 'initialize' && message.id) {
+      await this.handleInitialize(message);
+    } 
+    else if (message.method === 'tools/list' && message.id) {
+      await this.handleToolsList(message);
+    }
+    else if (message.method === 'tools/call' && message.id) {
+      await this.handleToolsCall(message);
+    }
     else if (message.method === 'notifications/initialized') {
       log('Received initialized notification');
       // No response needed for notifications
     }
-    // Handle resources/list request (not supported)
-    else if (message.method === 'resources/list' && message.id !== undefined) {
-      log('Responding to resources/list request with error');
-      await this.sendMessage({
-        jsonrpc: '2.0',
-        id: message.id,
-        error: {
-          code: -32601,
-          message: 'Method not found'
-        }
-      });
-    }
-    // Handle prompts/list request (not supported)
-    else if (message.method === 'prompts/list' && message.id !== undefined) {
-      log('Responding to prompts/list request with error');
-      await this.sendMessage({
-        jsonrpc: '2.0',
-        id: message.id,
-        error: {
-          code: -32601,
-          message: 'Method not found'
-        }
-      });
-    }
-    // Handle echo tool call
-    else if (message.method === 'tools/call' && message.params && message.params.name === 'echo' && message.id !== undefined) {
-      log(`Echo tool called with: ${JSON.stringify(message.params)}`);
-      await this.sendMessage({
-        jsonrpc: '2.0',
-        id: message.id,
-        result: {
-          content: [{ 
-            type: 'text', 
-            text: `You said: ${message.params.arguments?.message || 'nothing'}` 
-          }]
-        }
-      });
-    }
-    // Handle unknown requests
-    else if (message.method && message.id !== undefined) {
-      log(`Responding to unknown request: ${message.method}`);
-      await this.sendMessage({
-        jsonrpc: '2.0',
-        id: message.id,
-        error: {
-          code: -32601,
-          message: 'Method not found'
-        }
-      });
+    else if (message.id) {
+      // Unknown method but has an ID, send error response
+      await this.sendError(message.id, -32601, 'Method not found');
     }
   }
-  
-  start() {
-    if (this.started) {
-      throw new Error('Server already started');
-    }
-    
-    this.started = true;
-    process.stdin.on('data', this.ondata);
-    process.stdin.on('error', this.onerror);
-    
-    log('Server started and listening');
+
+  async handleInitialize(message) {
+    log('Handling initialize request');
+    await this.sendResponse(message.id, {
+      protocolVersion: '2024-11-05',
+      serverInfo: { name: 'delegate-mcp', version: '0.1.0' },
+      capabilities: { tools: {} }
+    });
   }
-  
-  stop() {
-    process.stdin.off('data', this.ondata);
-    process.stdin.off('error', this.onerror);
+
+  async handleToolsList(message) {
+    log('Handling tools/list request');
     
-    const hasRemainingListeners = process.stdin.listenerCount('data') > 0;
-    if (!hasRemainingListeners) {
-      process.stdin.pause();
+    // Prepare tools list
+    const toolsList = Object.values(this.tools).map(tool => ({
+      name: tool.name,
+      description: tool.description,
+      inputSchema: tool.schema
+    }));
+    
+    await this.sendResponse(message.id, { tools: toolsList });
+  }
+
+  async handleToolsCall(message) {
+    if (!message.params || !message.params.name) {
+      await this.sendError(message.id, -32602, 'Invalid params: tool name is required');
+      return;
+    }
+
+    const toolName = message.params.name;
+    const toolParams = message.params.parameters || {};
+    
+    log(`Handling tools/call request for ${toolName}`);
+    
+    if (!this.tools[toolName]) {
+      await this.sendError(message.id, -32602, `Tool not found: ${toolName}`);
+      return;
     }
     
-    this.readBuffer.clear();
-    log('Server stopped');
+    try {
+      // Call the tool handler
+      const result = await this.tools[toolName].handler(toolParams);
+      await this.sendResponse(message.id, result);
+    } catch (error) {
+      log(`Error in tool ${toolName}: ${error.message}`);
+      await this.sendError(
+        message.id, 
+        -32603, 
+        `Internal error in tool ${toolName}: ${error.message}`
+      );
+    }
+  }
+
+  // Tool handlers
+  async prepareContextHandler(params) {
+    log(`prepare_context called with paths: ${(params.paths || []).join(', ')}`);
+    
+    // This is a mock implementation - in production, you'd implement the real functionality
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Context prepared successfully from ${params.paths.length} paths.\n\n` +
+                `Paths: ${params.paths.join(', ')}\n` +
+                `Comment: ${params.comment || 'None'}\n\n` +
+                `This would save to GitHub repository ${params.owner || 'default-owner'}/${params.repo || 'default-repo'}\n` +
+                `Estimated token count: 1024`
+        }
+      ]
+    };
+  }
+
+  async delegateHandler(params) {
+    log(`delegate called with prompt: ${params.prompt.substring(0, 50)}...`);
+    
+    // This is a mock implementation - in production, you'd implement the real functionality
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Delegated to Gemini model: ${params.model || 'gemini-pro'}\n\n` +
+                `Prompt (first 50 chars): ${params.prompt.substring(0, 50)}...\n` +
+                `Paths: ${(params.paths || []).join(', ') || 'None'}\n\n` +
+                `Mock response: This is a simulated response from the model.`
+        }
+      ]
+    };
+  }
+
+  // Helper methods for sending responses
+  async sendResponse(id, result) {
+    const response = {
+      jsonrpc: '2.0',
+      id,
+      result
+    };
+    
+    log(`Sending response for ID ${id}`);
+    await this.send(response);
+  }
+
+  async sendError(id, code, message) {
+    const response = {
+      jsonrpc: '2.0',
+      id,
+      error: { code, message }
+    };
+    
+    log(`Sending error for ID ${id}: ${code} - ${message}`);
+    await this.send(response);
+  }
+
+  async send(message) {
+    return new Promise((resolve) => {
+      const jsonString = JSON.stringify(message) + '\n';
+      log(`Sending: ${jsonString.trim()}`);
+      
+      if (this.stdout.write(jsonString)) {
+        resolve();
+      } else {
+        this.stdout.once('drain', resolve);
+      }
+    });
   }
 }
 
-// Create and start the server
-const server = new SimpleServer();
-server.start();
-
-// Handle process exit
-process.on('SIGINT', () => {
-  log('Received SIGINT, shutting down');
-  server.stop();
-  process.exit(0);
-});
-
-process.on('SIGTERM', () => {
-  log('Received SIGTERM, shutting down');
-  server.stop();
-  process.exit(0);
-});
-
-log('Direct JS server running, waiting for messages');
+// Run the server
+(async () => {
+  try {
+    const server = new DirectServer();
+    await server.start();
+    
+    // Handle process termination
+    process.on('SIGINT', async () => {
+      log('Received SIGINT, shutting down');
+      await server.stop();
+      process.exit(0);
+    });
+    
+    process.on('SIGTERM', async () => {
+      log('Received SIGTERM, shutting down');
+      await server.stop();
+      process.exit(0);
+    });
+    
+    log('Server running, waiting for requests');
+  } catch (error) {
+    log(`Fatal error: ${error.message}`);
+    log(`Stack: ${error.stack}`);
+    process.exit(1);
+  }
+})();
