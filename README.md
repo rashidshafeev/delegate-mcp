@@ -150,6 +150,11 @@ For more detailed information, check out these documentation files:
 - [Detailed Usage Guide](docs/USAGE.md) - In-depth examples and file formats
 - [Development Guide](docs/DEVELOPMENT.md) - How to extend and modify the codebase
 - [Implementation Details](IMPLEMENTATION.md) - Overview of the current implementation
+- [Troubleshooting Guide](docs/TROUBLESHOOTING.md) - Solutions to common issues
+
+## Claude Compatibility
+
+This MCP server includes special handling for compatibility with Claude's MCP client implementation. If you encounter any JSON parsing errors when using Claude as a client, please see the [Troubleshooting Guide](docs/TROUBLESHOOTING.md).
 
 ## Contributing
 
