@@ -15,7 +15,8 @@
     "debug:json": "cross-env LOG_LEVEL=debug ts-node src/utils/debug-test.ts",
     "debug:json:build": "cross-env LOG_LEVEL=debug node dist/utils/debug-test.js",
     "debug:simple": "ts-node src/utils/simple-debug.ts",
-    "debug:minimal": "ts-node src/utils/minimal-server.ts"
+    "debug:minimal": "ts-node src/utils/minimal-server.ts",
+    "debug:direct": "ts-node src/utils/direct-transport.ts"
   },
   "author": "",
   "license": "MIT",
@@ -36,6 +37,7 @@
     "@typescript-eslint/parser": "^6.19.1",
     "eslint": "^8.56.0",
     "prettier": "^3.2.4",
+    "ts-node": "^10.9.2",
     "typescript": "^5.3.3",
     "vitest": "^1.2.1"
   },
