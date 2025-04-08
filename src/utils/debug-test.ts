@@ -2,7 +2,7 @@
  * Debug test utility for checking JSON formatting with the PatchedStdioServerTransport
  * 
  * Run this with:
- * npx ts-node src/utils/debug-test.ts
+ * npx ts-node-esm src/utils/debug-test.ts
  * 
  * Or after building:
  * node dist/utils/debug-test.js
@@ -145,6 +145,8 @@ async function runJsonTest() {
 }
 
 // Run the test
-runJsonTest().catch(error => {
-  logger.error('Test failed:', error);
-});
+if (import.meta.url === `file://${process.argv[1]}`) {
+  runJsonTest().catch(error => {
+    logger.error('Test failed:', error);
+  });
+}
