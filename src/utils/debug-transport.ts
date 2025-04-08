@@ -38,7 +38,7 @@ export class DebugTransportWrapper implements Transport {
     await this._wrapped.close();
   }
   
-  async send(message: JSONRPCMessage, options?: unknown): Promise<void> {
+  async send(message: JSONRPCMessage): Promise<void> {
     // Log the message first
     logger.debug(`SENDING TO CLIENT: ${JSON.stringify(message)}`);
     
@@ -52,6 +52,7 @@ export class DebugTransportWrapper implements Transport {
       message.jsonrpc = '2.0';
     }
     
-    await this._wrapped.send(message, options);
+    // The Transport interface only accepts one parameter
+    await this._wrapped.send(message);
   }
 }
