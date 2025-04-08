@@ -1,118 +1,178 @@
 /**
- * Simple debug script to test Claude compatibility
+ * Simple Debug Transport for testing
+ * 
+ * This file implements a simplified version of the MCP transport protocol
+ * for quick debugging without the full SDK.
+ * 
  * Run with: npx ts-node-esm src/utils/simple-debug.ts
  */
 
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { Readable, Writable } from 'node:stream';
-import fs from 'fs/promises';
-import { existsSync, mkdirSync } from 'fs';
-import path from 'path';
+// Global constants
+const JSON_RPC_VERSION = "2.0";
 
-// Set up console logging
-console.error('=== Simple Debug Test ===');
-console.error('Testing StdioServerTransport serialization');
-
-// Create a log directory if it doesn't exist
-const logDir = path.resolve(process.cwd(), 'logs');
-if (!existsSync(logDir)) {
-  try {
-    mkdirSync(logDir, { recursive: true });
-  } catch (error) {
-    console.error('Failed to create log directory:', error);
-  }
+// Simple implementation of JSON-RPC message sending over stdout
+function sendJsonRpc(message: any): void {
+  // Ensure we have the jsonrpc field
+  const fullMessage = { jsonrpc: JSON_RPC_VERSION, ...message };
+  
+  // Convert to JSON and add a newline
+  const json = JSON.stringify(fullMessage) + "\n";
+  
+  // Write to stdout
+  process.stdout.write(json);
+  
+  // Log to stderr for debugging (doesn't interfere with JSON-RPC)
+  console.error(`[DEBUG] Sent: ${json.trim()}`);
 }
 
-const logFile = path.join(logDir, `debug-${Date.now()}.log`);
-console.error(`Logging to: ${logFile}`);
-
-class TestReadable extends Readable {
-  _read() {}
+// Send a JSON-RPC response
+function sendResponse(id: string | number, result: any): void {
+  sendJsonRpc({ id, result });
 }
 
-class TestWritable extends Writable {
-  async _write(chunk: Buffer, encoding: BufferEncoding, callback: (error?: Error | null) => void): Promise<void> {
+// Send a JSON-RPC error
+function sendError(id: string | number, code: number, message: string): void {
+  sendJsonRpc({ id, error: { code, message } });
+}
+
+// Main entry point
+async function main(): Promise<void> {
+  console.error("[DEBUG] Simple debug transport starting");
+  
+  // Listen for data on stdin
+  process.stdin.on("data", (data: Buffer) => {
+    const input = data.toString();
+    console.error(`[DEBUG] Received: ${input.trim()}`);
+    
     try {
-      const msg = chunk.toString('utf8');
+      // Parse the JSON-RPC message
+      const message = JSON.parse(input);
       
-      // Log to file
-      await fs.appendFile(logFile, `${new Date().toISOString()} SENT: ${msg}\n`);
-      
-      // Log to console
-      console.error(`SENT: ${msg}`);
-      
-      // Check specifically position 5
-      if (msg.length > 5) {
-        console.error(`Character at position 5: '${msg.charAt(5)}' (ASCII: ${msg.charCodeAt(5)})`);
-        console.error(`Context: '${msg.substring(0, 10)}...'`);
-      }
-      
-      callback();
+      // Handle the message
+      handleMessage(message);
     } catch (error) {
-      callback(error as Error);
-    }
-  }
-}
-
-async function debugTransport() {
-  console.error('Creating test transport...');
-  
-  const input = new TestReadable();
-  const output = new TestWritable();
-  
-  // Try with the standard StdioServerTransport
-  const transport = new StdioServerTransport(input, output);
-  
-  // Test case 1: Initialize response
-  console.error('\nTEST CASE 1: Initialize response');
-  await transport.send({
-    jsonrpc: '2.0',
-    id: 0,
-    result: {
-      protocolVersion: '2024-11-05',
-      capabilities: { tools: {} },
-      serverInfo: { name: 'delegate-mcp', version: '0.1.0' }
+      console.error(`[DEBUG] Error processing message: ${(error as Error).message}`);
     }
   });
   
-  // Test case 2: Tools list response
-  console.error('\nTEST CASE 2: Tools list response');
-  await transport.send({
-    jsonrpc: '2.0',
-    id: 1,
-    result: {
+  // Handle process termination
+  process.on("SIGINT", () => {
+    console.error("[DEBUG] Received SIGINT, exiting");
+    process.exit(0);
+  });
+  
+  console.error("[DEBUG] Simple debug transport running");
+}
+
+// Handle a JSON-RPC message
+function handleMessage(message: any): void {
+  // Validate it's a JSON-RPC message
+  if (!message.jsonrpc || message.jsonrpc !== JSON_RPC_VERSION) {
+    console.error("[DEBUG] Not a valid JSON-RPC 2.0 message");
+    return;
+  }
+  
+  // Handle different message types
+  if (message.method === "initialize" && message.id) {
+    // Handle initialize request
+    console.error("[DEBUG] Handling initialize request");
+    
+    sendResponse(message.id, {
+      protocolVersion: "2024-11-05",
+      serverInfo: { name: "simple-debug", version: "0.1.0" },
+      capabilities: { tools: {} }
+    });
+  } 
+  else if (message.method === "tools/list" && message.id) {
+    // Handle tools/list request
+    console.error("[DEBUG] Handling tools/list request");
+    
+    sendResponse(message.id, {
       tools: [
         {
-          name: 'test_tool',
-          description: 'A test tool',
+          name: "echo",
+          description: "Simple echo tool for debugging",
           inputSchema: {
-            type: 'object',
+            type: "object",
             properties: {
-              param1: { type: 'string' }
-            }
+              message: { type: "string" }
+            },
+            required: ["message"]
+          }
+        },
+        {
+          name: "prepare_context",
+          description: "Prepare context from file paths (debug mock)",
+          inputSchema: {
+            type: "object",
+            properties: {
+              paths: { 
+                type: "array", 
+                items: { type: "string" },
+                description: "Array of file paths to include"
+              }
+            },
+            required: ["paths"]
           }
         }
       ]
+    });
+  }
+  else if (message.method === "tools/call" && message.id) {
+    // Handle tools/call request
+    console.error(`[DEBUG] Handling tools/call request for ${message.params?.name}`);
+    
+    if (!message.params || !message.params.name) {
+      sendError(message.id, -32602, "Invalid params: tool name is required");
+      return;
     }
-  });
-  
-  // Test case 3: Error response
-  console.error('\nTEST CASE 3: Error response');
-  await transport.send({
-    jsonrpc: '2.0',
-    id: 2,
-    error: {
-      code: -32601,
-      message: 'Method not found'
+    
+    // Handle different tools
+    if (message.params.name === "echo") {
+      const params = message.params.parameters || {};
+      
+      sendResponse(message.id, {
+        content: [
+          {
+            type: "text",
+            text: `Echo: ${params.message || "No message provided"}`
+          }
+        ]
+      });
     }
-  });
-  
-  console.error('\nDebug test completed');
+    else if (message.params.name === "prepare_context") {
+      const params = message.params.parameters || {};
+      const paths = params.paths || [];
+      
+      sendResponse(message.id, {
+        content: [
+          {
+            type: "text",
+            text: `Prepare context mock response:\nPaths: ${paths.join(", ")}\n\nThis is a debug mock implementation.`
+          }
+        ]
+      });
+    }
+    else {
+      sendError(message.id, -32601, `Tool not found: ${message.params.name}`);
+    }
+  }
+  else if (message.method === "notifications/initialized") {
+    // Handle initialized notification
+    console.error("[DEBUG] Received initialized notification");
+    // No response needed for notifications
+  }
+  else if (message.id) {
+    // Unknown method but has an ID, send error response
+    console.error(`[DEBUG] Unknown method: ${message.method}`);
+    sendError(message.id, -32601, "Method not found");
+  }
 }
 
-// Run the debug transport test
-if (import.meta.url === `file://${process.argv[1]}`) {
-  debugTransport().catch(error => {
-    console.error('Debug test failed:', error);
+// Run the main function
+if (require.main === module) {
+  main().catch(error => {
+    console.error(`[DEBUG] Fatal error: ${error.message}`);
+    process.exit(1);
   });
 }
