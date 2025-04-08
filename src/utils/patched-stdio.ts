@@ -4,8 +4,7 @@ import { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import { logger } from './logger.js';
 
 /**
- * A patched version of StdioServerTransport that ensures proper JSON formatting
- * This version fixes the issue with Claude's JSON parser
+ * A patched version of StdioServerTransport that ensures compatibility with Claude's JSON parser
  */
 export class PatchedStdioServerTransport extends StdioServerTransport {
   constructor(stdin: Readable = process.stdin, stdout: Writable = process.stdout) {
@@ -15,11 +14,18 @@ export class PatchedStdioServerTransport extends StdioServerTransport {
   // Override the send method to ensure proper JSON formatting
   async send(message: JSONRPCMessage): Promise<void> {
     try {
-      // Add this logging to see the exact format we're sending
-      logger.debug(`Sending message: ${JSON.stringify(message)}`);
+      // First, log the exact message we're sending
+      logger.debug(`Original message: ${JSON.stringify(message)}`);
       
-      // Format the JSON string - we use a custom serialization to ensure compatibility
-      const jsonString = this.safeJSONStringify(message) + '\n';
+      // Extremely conservative approach - manually construct the JSON
+      // This avoids any potential issues with JSON.stringify
+      let jsonString = this.manualJsonStringify(message);
+      
+      // Add a newline at the end
+      jsonString += '\n';
+      
+      // Log the final format
+      logger.debug(`Sending JSON: ${jsonString.trim()}`);
       
       // Send the formatted message
       return new Promise((resolve) => {
@@ -36,30 +42,93 @@ export class PatchedStdioServerTransport extends StdioServerTransport {
   }
   
   /**
-   * Safe JSON stringify that ensures compatibility with Claude's parser
+   * Manual JSON stringify that's extremely careful about formatting
+   * This avoids any potential issues with standard JSON.stringify
    */
-  private safeJSONStringify(obj: any): string {
-    // Handle null and undefined
-    if (obj === null || obj === undefined) {
+  private manualJsonStringify(obj: JSONRPCMessage): string {
+    // Start with an empty object
+    let result = '{';
+    
+    // Handle each property manually
+    const properties: string[] = [];
+    
+    // Always put jsonrpc first
+    properties.push(`"jsonrpc":"2.0"`);
+    
+    // Handle id
+    if ('id' in obj && obj.id !== undefined) {
+      properties.push(`"id":${typeof obj.id === 'string' ? `"${obj.id}"` : obj.id}`);
+    }
+    
+    // Handle method
+    if ('method' in obj && obj.method) {
+      properties.push(`"method":"${obj.method}"`);
+    }
+    
+    // Handle params
+    if ('params' in obj && obj.params) {
+      properties.push(`"params":${this.stringifyValue(obj.params)}`);
+    }
+    
+    // Handle result
+    if ('result' in obj && obj.result !== undefined) {
+      properties.push(`"result":${this.stringifyValue(obj.result)}`);
+    }
+    
+    // Handle error
+    if ('error' in obj && obj.error) {
+      properties.push(`"error":${this.stringifyValue(obj.error)}`);
+    }
+    
+    // Join properties
+    result += properties.join(',');
+    
+    // Close object
+    result += '}';
+    
+    return result;
+  }
+  
+  /**
+   * Helper to stringify values with special handling for objects, arrays, and primitives
+   */
+  private stringifyValue(value: any): string {
+    if (value === null) {
       return 'null';
     }
     
-    // Handle simple types
-    if (typeof obj !== 'object') {
-      return JSON.stringify(obj);
+    if (value === undefined) {
+      return 'null';
     }
     
-    // Handle arrays
-    if (Array.isArray(obj)) {
-      const items = obj.map(item => this.safeJSONStringify(item));
-      return `[${items.join(',')}]`;
+    // Handle various types
+    switch (typeof value) {
+      case 'string':
+        // Escape quotes and special characters
+        return `"${value.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"`;
+        
+      case 'number':
+      case 'boolean':
+        return String(value);
+        
+      case 'object':
+        if (Array.isArray(value)) {
+          // Handle arrays
+          return `[${value.map(item => this.stringifyValue(item)).join(',')}]`;
+        } else {
+          // Handle objects
+          const properties: string[] = [];
+          
+          for (const [key, propValue] of Object.entries(value)) {
+            properties.push(`"${key}":${this.stringifyValue(propValue)}`);
+          }
+          
+          return `{${properties.join(',')}}`;
+        }
+        
+      default:
+        // Fallback to built-in stringify for other types
+        return JSON.stringify(value);
     }
-    
-    // Handle objects
-    const pairs = Object.entries(obj).map(([key, value]) => {
-      return `"${key}":${this.safeJSONStringify(value)}`;
-    });
-    
-    return `{${pairs.join(',')}}`;
   }
 }
