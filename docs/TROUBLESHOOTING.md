@@ -12,38 +12,40 @@ Expected ',' or ']' after array element in JSON at position 5 (line 1 column 6)
 
 This is due to a compatibility issue with how Claude's MCP client parses JSON responses. We've implemented the following fixes:
 
-1. Added a patched stdio transport that formats JSON in a more compatible way
-2. Added debug transport wrapper to log all messages for troubleshooting
-3. Implemented enhanced array handling and string escaping in JSON serialization
+1. **Complete JSON Serialization Rewrite** (commit 126c382f): A completely manual approach to JSON formatting that ensures compatibility with Claude's more strict JSON parser
+2. **Added Debug Transport Wrapper**: For logging all messages to help troubleshoot format issues
+3. **Implemented Character-Level String Escaping**: To handle all special characters properly
 
-The current version (post-fix in commit 71451520) should work with Claude, but if you still encounter issues, try these additional steps:
+### Understanding the Position 5 Error
 
-1. Enable debug logging to see the exact JSON being sent/received:
-   ```
-   LOG_LEVEL=debug npm start
-   ```
+The specific error at "position 5" refers to the 6th character in the JSON message (0-indexed). In JSON-RPC messages, this position is typically where the first comma appears after the "jsonrpc":"2.0" property. 
 
-2. Use the debug test utility to check JSON formatting:
-   ```
-   npm run debug:json
-   ```
-   This will run test cases with various JSON structures and output the formatted results.
+For example, in a message like:
+```json
+{"jsonrpc":"2.0","id":0,...}
+```
 
-3. If you see specific JSON format errors in the logs, you may need to further modify the `PatchedStdioServerTransport` class in `src/utils/patched-stdio.ts` to handle edge cases.
+Position 5 is where the first comma is located. Claude's parser appears to be particularly sensitive to formatting in this area.
 
-## Common Claude-specific JSON Issues
+Our fix ensures that all messages follow a strict format with:
+- Consistent property ordering (jsonrpc first, then id, method, etc.)
+- Proper comma placement
+- Strict string escaping
+- Handling of undefined, null, and special values
 
-Claude's JSON parser can be particularly sensitive to:
+## Testing Your JSON Formatting
 
-1. Control characters in strings
-2. Arrays with undefined or complex values
-3. Nested arrays or objects with inconsistent formatting
+The current version should work with Claude, but you can use the built-in debug test utility to verify proper JSON formatting:
 
-If you continue to experience issues, try these approaches:
+```bash
+# Run the debug test
+npm run debug:json
 
-1. Set `LOG_LEVEL=debug` to see all transmitted JSON
-2. Look for patterns in the error messages (position numbers can help identify the problematic part)
-3. Consider simplifying complex data structures in responses
+# Or with the compiled version
+npm run debug:json:build
+```
+
+This will generate sample JSON-RPC messages and verify character positions for troubleshooting.
 
 ## Gemini API Key Issues
 
@@ -117,7 +119,7 @@ If you're experiencing issues:
 ### Claude
 - We've implemented special JSON serialization to work around Claude's JSON parsing issues
 - If still encountering problems, check logs for exact JSON format issues
-- The latest fixes (as of commit 71451520) include enhanced array handling and string escaping
+- Our latest fixes (as of commits 126c382f and 50551b2e) include character-level string escaping and strict JSON construction
 - Use the debug:json script to test JSON formatting in isolation
 
 ### Other Clients
