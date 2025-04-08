@@ -71,29 +71,52 @@ export class GeminiProvider extends BaseModelProvider {
       const model = this.client!.getGenerativeModel({ model: options.model });
       
       // Handle system prompt if provided
-      let chatSession;
       if (options.systemPrompt) {
-        chatSession = model.startChat({
+        // For models that support system prompts, we need to use the chat interface
+        // First, create a chat with the system prompt as the first message
+        const chat = model.startChat({
           generationConfig,
-          systemInstruction: options.systemPrompt,
+          // System instructions are passed through the history in recent versions
         });
         
-        const result = await chatSession.sendMessage(options.prompt);
-        const response = result.response;
-        
-        return {
-          content: response.text(),
-          model: options.model,
-          provider: this.name,
-          tokenUsage: {
-            // The API doesn't return token usage info
-            prompt: undefined,
-            completion: undefined,
-            total: undefined,
-          },
-        };
+        // Send the system prompt as a system message if possible, otherwise use a workaround
+        try {
+          // Combined approach - prepend to the prompt
+          const systemPrefixedPrompt = `[System: ${options.systemPrompt}]\n\n${options.prompt}`;
+          const result = await chat.sendMessage(systemPrefixedPrompt);
+          const response = result.response;
+          
+          return {
+            content: response.text(),
+            model: options.model,
+            provider: this.name,
+            tokenUsage: {
+              // The API doesn't return token usage info
+              prompt: undefined,
+              completion: undefined,
+              total: undefined,
+            },
+          };
+        } catch (error) {
+          logger.warn(`Failed to use chat with system prompt, falling back to direct completion: ${(error as Error).message}`);
+          // Fall back to direct completion if chat fails
+          const systemPrefixedPrompt = `[System: ${options.systemPrompt}]\n\n${options.prompt}`;
+          const result = await model.generateContent(systemPrefixedPrompt);
+          const response = result.response;
+          
+          return {
+            content: response.text(),
+            model: options.model,
+            provider: this.name,
+            tokenUsage: {
+              prompt: undefined,
+              completion: undefined,
+              total: undefined,
+            },
+          };
+        }
       } else {
-        // Direct completion without chat
+        // Direct completion without system prompt
         const result = await model.generateContent({
           contents: [{ role: 'user', parts: [{ text: options.prompt }] }],
           generationConfig,
