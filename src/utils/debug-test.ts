@@ -11,6 +11,7 @@
 import { PatchedStdioServerTransport } from './patched-stdio.js';
 import { logger } from './logger.js';
 import { Readable, Writable } from 'node:stream';
+import { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 
 // Set log level to debug for this test
 process.env.LOG_LEVEL = 'debug';
@@ -40,21 +41,26 @@ async function runJsonTest() {
   
   const transport = new PatchedStdioServerTransport(input, output);
   
-  // Test case 1: Simple message
-  logger.info('Test case 1: Simple message');
+  // Test case 1: Simple message with object result (proper type)
+  logger.info('Test case 1: Simple message with object result');
   await transport.send({
     jsonrpc: '2.0',
     id: 1,
-    result: 'Simple result'
-  });
+    result: { content: 'Simple result' }
+  } as JSONRPCMessage);
   
-  // Test case 2: Message with array
-  logger.info('Test case 2: Message with array');
+  // Test case 2: Message with tools array in result
+  logger.info('Test case 2: Message with tools array in result');
   await transport.send({
     jsonrpc: '2.0',
     id: 2,
-    result: ['item1', 'item2', 'item3']
-  });
+    result: { 
+      tools: [
+        { name: 'tool1', description: 'First tool' },
+        { name: 'tool2', description: 'Second tool' }
+      ]
+    }
+  } as JSONRPCMessage);
   
   // Test case 3: Message with nested objects and arrays
   logger.info('Test case 3: Message with nested objects and arrays');
@@ -71,7 +77,7 @@ async function runJsonTest() {
         page: 1
       }
     }
-  });
+  } as JSONRPCMessage);
   
   // Test case 4: Message with special characters
   logger.info('Test case 4: Message with special characters');
@@ -82,15 +88,15 @@ async function runJsonTest() {
       text: 'Special characters: \n, \t, \r, \b, \f',
       quote: 'This has "quotes" and \\backslashes\\'
     }
-  });
+  } as JSONRPCMessage);
   
-  // Test case 5: Message with empty array
-  logger.info('Test case 5: Message with empty array');
+  // Test case 5: Message with empty array in an object
+  logger.info('Test case 5: Message with empty array in an object');
   await transport.send({
     jsonrpc: '2.0',
     id: 5,
-    result: []
-  });
+    result: { items: [] }
+  } as JSONRPCMessage);
   
   // Test case 6: Message with undefined and null values (should handle properly)
   logger.info('Test case 6: Message with undefined and null values');
@@ -104,7 +110,7 @@ async function runJsonTest() {
       undefinedValue: undefined,
       arrayWithUndefined: ['valid', undefined, 'also valid']
     }
-  });
+  } as JSONRPCMessage);
   
   // Test case 7: Error response
   logger.info('Test case 7: Error response');
@@ -115,7 +121,19 @@ async function runJsonTest() {
       code: -32600,
       message: 'Invalid request'
     }
-  });
+  } as JSONRPCMessage);
+  
+  // Test case 8: MCP initialize response
+  logger.info('Test case 8: MCP initialize response');
+  await transport.send({
+    jsonrpc: '2.0',
+    id: 8,
+    result: {
+      protocolVersion: '2024-11-05',
+      capabilities: { tools: {} },
+      serverInfo: { name: 'delegate-mcp', version: '0.1.0' }
+    }
+  } as JSONRPCMessage);
   
   // Show the output
   logger.info('=== Formatted outputs ===');
