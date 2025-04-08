@@ -21,6 +21,9 @@ if (process.argv.length <= 2) {
   // and start the server directly
   logger.info('Starting MCP server in direct mode');
   
+  // Setup environment for proper JSON handling with Claude
+  process.env.NODE_ENV = 'production';
+  
   (async () => {
     try {
       // Initialize providers (only Gemini)
