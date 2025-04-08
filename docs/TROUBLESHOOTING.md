@@ -10,42 +10,24 @@ If you're using Claude as an MCP client and see errors like:
 Expected ',' or ']' after array element in JSON at position 5 (line 1 column 6)
 ```
 
-This is due to a compatibility issue with how Claude's MCP client parses JSON responses. We've implemented the following fixes:
+We've implemented a solution by using the standard MCP SDK's StdioServerTransport for maximum compatibility.
 
-1. **Complete JSON Serialization Rewrite** (commit 126c382f): A completely manual approach to JSON formatting that ensures compatibility with Claude's more strict JSON parser
-2. **Added Debug Transport Wrapper**: For logging all messages to help troubleshoot format issues
-3. **Implemented Character-Level String Escaping**: To handle all special characters properly
+### Solution
 
-### Understanding the Position 5 Error
+After extensive testing, we found that the most reliable solution is:
 
-The specific error at "position 5" refers to the 6th character in the JSON message (0-indexed). In JSON-RPC messages, this position is typically where the first comma appears after the "jsonrpc":"2.0" property. 
+1. **Use the standard transport**: We now use the standard `StdioServerTransport` from the MCP SDK without any customization
+2. **Set NODE_ENV to production**: This improves JSON stability for Claude's parser
+3. **Avoid custom JSON serialization**: Removing our custom JSON handling eliminated the parsing errors
 
-For example, in a message like:
-```json
-{"jsonrpc":"2.0","id":0,...}
-```
+If you still encounter JSON parsing issues:
 
-Position 5 is where the first comma is located. Claude's parser appears to be particularly sensitive to formatting in this area.
-
-Our fix ensures that all messages follow a strict format with:
-- Consistent property ordering (jsonrpc first, then id, method, etc.)
-- Proper comma placement
-- Strict string escaping
-- Handling of undefined, null, and special values
-
-## Testing Your JSON Formatting
-
-The current version should work with Claude, but you can use the built-in debug test utility to verify proper JSON formatting:
-
-```bash
-# Run the debug test
-npm run debug:json
-
-# Or with the compiled version
-npm run debug:json:build
-```
-
-This will generate sample JSON-RPC messages and verify character positions for troubleshooting.
+1. Make sure you have the latest version of delegate-mcp (requires commit afb97e3 or later)
+2. Ensure you're using the latest version of the MCP SDK
+3. Run with debug logging to see the exact messages being sent/received:
+   ```
+   LOG_LEVEL=debug npm start
+   ```
 
 ## Gemini API Key Issues
 
@@ -73,21 +55,12 @@ If you're experiencing issues:
    LOG_LEVEL=debug npm start
    ```
 
-2. Use the built-in debug test utilities:
-   ```bash
-   # Test JSON formatting
-   npm run debug:json
-   
-   # Or with the compiled version
-   npm run debug:json:build
-   ```
-
-3. Check the logs for detailed information about:
+2. Check the logs for detailed information about:
    - Exact JSON being sent and received
    - API calls to Gemini and GitHub
    - Any errors occurring during processing
 
-4. Use the `check` command to verify provider availability:
+3. Use the `check` command to verify provider availability:
    ```bash
    npm start -- check
    ```
@@ -117,10 +90,9 @@ If you're experiencing issues:
 ## Client-Specific Issues
 
 ### Claude
-- We've implemented special JSON serialization to work around Claude's JSON parsing issues
-- If still encountering problems, check logs for exact JSON format issues
-- Our latest fixes (as of commits 126c382f and 50551b2e) include character-level string escaping and strict JSON construction
-- Use the debug:json script to test JSON formatting in isolation
+- We now use the standard MCP SDK transport implementation for Claude compatibility
+- Setting `NODE_ENV=production` in the environment helps improve stability
+- If you're still encountering issues, please create a GitHub issue with detailed logs
 
 ### Other Clients
 - Make sure the client supports MCP protocol version "2024-11-05"
