@@ -1,12 +1,12 @@
 /**
  * Simple debug script to test Claude compatibility
- * Run with: npx ts-node src/utils/simple-debug.ts
+ * Run with: npx ts-node-esm src/utils/simple-debug.ts
  */
 
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { Readable, Writable } from 'node:stream';
 import fs from 'fs/promises';
-import { existsSync } from 'fs';
+import { existsSync, mkdirSync } from 'fs';
 import path from 'path';
 
 // Set up console logging
@@ -16,7 +16,11 @@ console.error('Testing StdioServerTransport serialization');
 // Create a log directory if it doesn't exist
 const logDir = path.resolve(process.cwd(), 'logs');
 if (!existsSync(logDir)) {
-  fs.mkdir(logDir, { recursive: true });
+  try {
+    mkdirSync(logDir, { recursive: true });
+  } catch (error) {
+    console.error('Failed to create log directory:', error);
+  }
 }
 
 const logFile = path.join(logDir, `debug-${Date.now()}.log`);
@@ -107,6 +111,8 @@ async function debugTransport() {
 }
 
 // Run the debug transport test
-debugTransport().catch(error => {
-  console.error('Debug test failed:', error);
-});
+if (import.meta.url === `file://${process.argv[1]}`) {
+  debugTransport().catch(error => {
+    console.error('Debug test failed:', error);
+  });
+}
