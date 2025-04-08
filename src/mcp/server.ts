@@ -1,10 +1,10 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { logger } from '../utils/logger.js';
 import { prepareContextTool } from './tools/prepare-context.js';
 import { delegateTool } from './tools/delegate.js';
 import { DebugTransportWrapper } from '../utils/debug-transport.js';
+import { PatchedStdioServerTransport } from '../utils/patched-stdio.js';
 
 /**
  * Create and configure an MCP server with the prepare_context and delegate tools
@@ -33,11 +33,12 @@ export function createMcpServer(): McpServer {
 export async function startMcpServer(): Promise<McpServer> {
   const server = createMcpServer();
   
-  // Create the transport with debug wrapper
-  const stdioTransport = new StdioServerTransport();
+  // Create the transport with debugging and patching
+  // Use our patched version of StdioServerTransport to fix JSON issues
+  const stdioTransport = new PatchedStdioServerTransport();
   const transport = new DebugTransportWrapper(stdioTransport);
   
-  logger.info('Starting MCP server with stdio transport');
+  logger.info('Starting MCP server with patched stdio transport');
   await server.connect(transport);
   logger.success('MCP server started');
   
