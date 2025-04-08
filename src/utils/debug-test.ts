@@ -2,7 +2,7 @@
  * Debug test utility for checking JSON formatting with the PatchedStdioServerTransport
  * 
  * Run this with:
- * ts-node src/utils/debug-test.ts
+ * npx ts-node src/utils/debug-test.ts
  * 
  * Or after building:
  * node dist/utils/debug-test.js
@@ -41,12 +41,16 @@ async function runJsonTest() {
   
   const transport = new PatchedStdioServerTransport(input, output);
   
-  // Test case 1: Simple message with object result (proper type)
-  logger.info('Test case 1: Simple message with object result');
+  // Test case 1: Initialize response (most critical for MCP protocol)
+  logger.info('Test case 1: Initialize response');
   await transport.send({
     jsonrpc: '2.0',
-    id: 1,
-    result: { content: 'Simple result' }
+    id: 0,
+    result: {
+      protocolVersion: '2024-11-05',
+      capabilities: { tools: {} },
+      serverInfo: { name: 'delegate-mcp', version: '0.1.0' }
+    }
   } as JSONRPCMessage);
   
   // Test case 2: Message with tools array in result
@@ -62,20 +66,14 @@ async function runJsonTest() {
     }
   } as JSONRPCMessage);
   
-  // Test case 3: Message with nested objects and arrays
-  logger.info('Test case 3: Message with nested objects and arrays');
+  // Test case 3: Error response (common in MCP protocol)
+  logger.info('Test case 3: Error response');
   await transport.send({
     jsonrpc: '2.0',
     id: 3,
-    result: {
-      items: [
-        { id: 1, name: 'First item' },
-        { id: 2, name: 'Second item', tags: ['tag1', 'tag2'] }
-      ],
-      metadata: {
-        count: 2,
-        page: 1
-      }
+    error: {
+      code: -32601,
+      message: 'Method not found'
     }
   } as JSONRPCMessage);
   
@@ -98,7 +96,7 @@ async function runJsonTest() {
     result: { items: [] }
   } as JSONRPCMessage);
   
-  // Test case 6: Message with undefined and null values (should handle properly)
+  // Test case 6: Message with undefined and null values
   logger.info('Test case 6: Message with undefined and null values');
   await transport.send({
     jsonrpc: '2.0',
@@ -112,27 +110,20 @@ async function runJsonTest() {
     }
   } as JSONRPCMessage);
   
-  // Test case 7: Error response
-  logger.info('Test case 7: Error response');
+  // Test case 7: Notification message (no id)
+  logger.info('Test case 7: Notification message (no id)');
   await transport.send({
     jsonrpc: '2.0',
-    id: 7,
-    error: {
-      code: -32600,
-      message: 'Invalid request'
-    }
+    method: 'notifications/initialized'
   } as JSONRPCMessage);
   
-  // Test case 8: MCP initialize response
-  logger.info('Test case 8: MCP initialize response');
+  // Test case 8: Method call with params
+  logger.info('Test case 8: Method call with params');
   await transport.send({
     jsonrpc: '2.0',
     id: 8,
-    result: {
-      protocolVersion: '2024-11-05',
-      capabilities: { tools: {} },
-      serverInfo: { name: 'delegate-mcp', version: '0.1.0' }
-    }
+    method: 'tools/list',
+    params: {}
   } as JSONRPCMessage);
   
   // Show the output
@@ -140,6 +131,17 @@ async function runJsonTest() {
   logger.info(output.getOutput());
   
   logger.info('=== Test completed ===');
+  
+  // Now check specifically for position 5 (which is where the Claude error occurred)
+  const allOutputs = output.getOutput().split('\n').filter(line => line.trim().length > 0);
+  
+  logger.info('=== Character at position 5 in each message ===');
+  for (let i = 0; i < allOutputs.length; i++) {
+    const line = allOutputs[i];
+    const charAtPos5 = line.charAt(5);
+    const context = line.substring(0, 10) + '...';
+    logger.info(`Message ${i+1}: '${charAtPos5}' (context: ${context})`);
+  }
 }
 
 // Run the test
