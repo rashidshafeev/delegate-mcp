@@ -16,6 +16,12 @@ Model Context Protocol (MCP) implementation that provides context preparation an
   - Configurable to return results in real-time or save to GitHub
   - Saves both conversation and model response to GitHub
 
+## Latest Updates
+
+- **Enhanced Claude Compatibility**: Added robust JSON parsing fixes to ensure error-free operation with Claude's MCP client implementation
+- **Improved Error Handling**: Better error reporting and recovery
+- **Documentation**: Expanded troubleshooting guide with client-specific solutions
+
 ## Installation
 
 ### Prerequisites
@@ -63,7 +69,7 @@ npm start
 Or for debug mode:
 
 ```bash
-npm start -- start --debug
+LOG_LEVEL=debug npm start
 ```
 
 ### Checking Provider Availability
@@ -154,7 +160,13 @@ For more detailed information, check out these documentation files:
 
 ## Claude Compatibility
 
-This MCP server includes special handling for compatibility with Claude's MCP client implementation. If you encounter any JSON parsing errors when using Claude as a client, please see the [Troubleshooting Guide](docs/TROUBLESHOOTING.md).
+This MCP server includes special handling for compatibility with Claude's MCP client implementation:
+
+- Custom JSON serialization with enhanced array handling and string escaping
+- Debugging transport wrapper for troubleshooting
+- Robust error handling for protocol-specific edge cases
+
+If you encounter any JSON parsing errors when using Claude as a client, please see the [Troubleshooting Guide](docs/TROUBLESHOOTING.md) for detailed solutions.
 
 ## Contributing
 
